@@ -1,0 +1,24 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "lib/*",
+    "scripts"
+  ],
+  "scripts": {
+    "dev": "concurrently -n backend,frontend \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
+    "dev:frontend": "npm run dev -w apps/frontend",
+    "dev:backend": "npm run dev -w apps/backend",
+    "build": "npm run typecheck && npm -ws --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "npm run typecheck:libs && npm -ws --if-present run typecheck"
+  },
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
+  }
+}

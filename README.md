@@ -26,3 +26,42 @@ Hệ thống hỗ trợ doanh nghiệp theo dõi ngân sách, quản lý thu/chi
 | 7 | Đa tiền tệ (Multi-currency) | - Chỉ dùng VND. | - Tỷ giá: nhập chi phí bằng USD, hệ thống tự quy đổi ra VND theo tỷ giá ngày giao dịch để trừ ngân sách. |
 | 8 | Báo cáo Tài chính | - Báo cáo tổng thu.<br>- Tổng chi.<br>- Biểu đồ tròn cơ cấu chi phí. | - Báo cáo so sánh (Budget vs. Actual): biểu đồ cột ghép "Kế hoạch" và "Thực tế".<br>- Dự báo dòng tiền: dựa trên các khoản chi định kỳ sắp tới để ước tính nhu cầu tiền tháng sau. |
 | 9 | Bảo mật & Nhật ký | - Đăng nhập mới được xem. | - Sổ cái bất biến (Immutable Ledger): không cho sửa/xóa phiếu chi đã chốt; nếu sai phải tạo bút toán đảo chiều (Reversal Entry). |
+
+## Cách chạy dự án (chỉ dùng npm)
+
+### 1) Cài dependencies
+
+```bash
+npm install
+```
+
+### 2) Chạy Frontend
+
+```bash
+npm run dev:frontend
+```
+
+Mặc định Vite chạy ở `http://localhost:5173`.
+
+### 3) Chạy Backend
+
+Backend cần biến môi trường `DATABASE_URL` để kết nối PostgreSQL.
+
+Ví dụ (Linux/macOS):
+
+```bash
+export DATABASE_URL="postgres://user:pass@localhost:5432/dbname"
+npm run dev:backend
+```
+
+### 4) Chạy cả Frontend + Backend cùng lúc
+
+```bash
+npm run dev
+```
+
+### 5) Typecheck
+
+```bash
+npm run typecheck
+```

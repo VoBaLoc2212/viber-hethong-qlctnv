@@ -1,0 +1,179 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  EMPLOYEE
+  MANAGER
+  ACCOUNTANT
+  FINANCE_ADMIN
+  AUDITOR
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  EXECUTED
+  REJECTED
+  REVERSED
+}
+
+enum LedgerEntryType {
+  EXPENSE
+  INCOME
+  TRANSFER
+  ADJUSTMENT
+  REVERSAL
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  fullName  String
+  role      UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+  approvals    Approval[] @relation("Approver")
+}
+
+model Department {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  budgetAllocated Decimal  @db.Decimal(18, 2)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  budgets      Budget[]
+  transactions Transaction[]
+}
+
+model Budget {
+  id           String   @id @default(uuid())
+  departmentId String
+  period       String
+  amount       Decimal  @db.Decimal(18, 2)
+  reserved     Decimal  @default(0) @db.Decimal(18, 2)
+  used         Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department @relation(fields: [departmentId], references: [id])
+}
+
+model Transaction {
+  id          String            @id @default(uuid())
+  code        String            @unique
+  type        TransactionType
+  status      TransactionStatus @default(PENDING)
+  amount      Decimal           @db.Decimal(18, 2)
+  currency    String            @default("VND")
+  date        DateTime
+  description String?
+
+  departmentId String?
+  createdById  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  department Department? @relation(fields: [departmentId], references: [id])
+  createdBy  User        @relation(fields: [createdById], references: [id])
+
+  approvals Approval[]
+  postings  CashbookPosting[]
+}
+
+model Approval {
+  id            String   @id @default(uuid())
+  transactionId String
+  approverId    String
+  status        String
+  note          String?
+  approvedAt    DateTime?
+  createdAt     DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  approver    User        @relation("Approver", fields: [approverId], references: [id])
+}
+
+model CashbookAccount {
+  id        String   @id @default(uuid())
+  name      String
+  type      String
+  balance   Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  postings CashbookPosting[]
+}
+
+model CashbookPosting {
+  id            String   @id @default(uuid())
+  accountId     String
+  transactionId String
+  direction     String
+  amount        Decimal  @db.Decimal(18, 2)
+  postedAt      DateTime @default(now())
+
+  account     CashbookAccount @relation(fields: [accountId], references: [id])
+  transaction Transaction     @relation(fields: [transactionId], references: [id])
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  entryCode     String          @unique
+  type          LedgerEntryType
+  amount        Decimal         @db.Decimal(18, 2)
+  currency      String          @default("VND")
+  referenceType String
+  referenceId   String
+  metadata      Json?
+  createdById   String
+  createdAt     DateTime        @default(now())
+
+  createdBy User @relation(fields: [createdById], references: [id])
+}
+
+model BudgetTransfer {
+  id            String   @id @default(uuid())
+  fromBudgetId  String
+  toBudgetId    String
+  amount        Decimal  @db.Decimal(18, 2)
+  reason        String?
+  createdById   String
+  createdAt     DateTime @default(now())
+}
+
+model Reimbursement {
+  id             String   @id @default(uuid())
+  employeeId     String
+  advanceAmount  Decimal  @db.Decimal(18, 2)
+  actualAmount   Decimal? @db.Decimal(18, 2)
+  netAmount      Decimal? @db.Decimal(18, 2)
+  settledAt      DateTime?
+  createdAt      DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime @default(now())
+}

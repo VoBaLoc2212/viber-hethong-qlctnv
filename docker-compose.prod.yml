@@ -29,20 +29,21 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Backend API Server (Production)
-  backend:
+  # Next.js App Router (src runtime)
+  web:
     build:
       context: .
       dockerfile: Dockerfile.backend
       args:
         NODE_ENV: production
-    container_name: budget_backend_prod
-    image: budget-backend:latest
+    container_name: budget_web_prod
+    image: budget-web:latest
     environment:
       DATABASE_URL: ${DATABASE_URL}
-      PORT: 3000
+      PORT: 3001
       NODE_ENV: production
       LOG_LEVEL: warn
+      NEXT_PUBLIC_API_URL: https://$${DOMAIN}/api
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT}
       SMTP_USER: ${SMTP_USER}
@@ -50,8 +51,6 @@ services:
       SENDER_EMAIL: ${SENDER_EMAIL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
-    ports:
-      - "3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,27 +63,11 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
-  # Frontend App (Production - with Nginx reverse proxy)
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: budget_frontend_prod
-    image: budget-frontend:latest
-    networks:
-      - budget_network
-    restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
   # Nginx Reverse Proxy
   nginx:
@@ -97,8 +80,7 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl_certificates:/etc/nginx/ssl:ro
     depends_on:
-      - backend
-      - frontend
+      - web
     networks:
       - budget_network
     restart: unless-stopped

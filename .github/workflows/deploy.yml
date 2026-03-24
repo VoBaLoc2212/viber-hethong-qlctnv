@@ -12,7 +12,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +50,7 @@ jobs:
           echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H $DEPLOY_HOST >> ~/.ssh/known_hosts
-          
+
           ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST << 'EOF'
             cd /app/budget-management
             docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

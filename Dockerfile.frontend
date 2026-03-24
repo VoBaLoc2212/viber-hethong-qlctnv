@@ -4,9 +4,6 @@ WORKDIR /app
 
 # Copy package files
 COPY package.json package-lock.json ./
-COPY apps/frontend/package.json apps/frontend/
-COPY lib/api-client-react/package.json lib/api-client-react/
-COPY lib/api-zod/package.json lib/api-zod/
 
 # Install dependencies
 RUN npm ci
@@ -14,6 +11,6 @@ RUN npm ci
 # Copy all source files
 COPY . .
 
-EXPOSE 5173
+EXPOSE 3001
 
-CMD ["npm", "run", "dev", "-w", "apps/frontend"]
+CMD ["npm", "run", "dev"]

@@ -6,8 +6,7 @@ help:
 	@echo "Development:"
 	@echo "  make dev              - Start development environment"
 	@echo "  make logs             - View logs from all services"
-	@echo "  make logs-backend     - View backend logs only"
-	@echo "  make logs-frontend    - View frontend logs only"
+	@echo "  make logs-web         - View app logs only"
 	@echo "  make logs-db          - View database logs only"
 	@echo ""
 	@echo "Database:"
@@ -32,8 +31,8 @@ dev:
 	@echo "✓ Services started!"
 	@echo ""
 	@echo "URLs:"
-	@echo "  Frontend:  http://localhost:5173"
-	@echo "  Backend:   http://localhost:3000/api"
+	@echo "  App:       http://localhost:3001"
+	@echo "  API:       http://localhost:3001/api"
 	@echo "  pgAdmin:   http://localhost:5050"
 	@echo ""
 	@echo "Database credentials:"
@@ -43,11 +42,8 @@ dev:
 logs:
 	docker-compose logs -f
 
-logs-backend:
-	docker-compose logs -f backend
-
-logs-frontend:
-	docker-compose logs -f frontend
+logs-web:
+	docker-compose logs -f web
 
 logs-db:
 	docker-compose logs -f postgres

@@ -2,23 +2,34 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
-  "workspaces": [
-    "apps/*",
-    "lib/*",
-    "scripts"
-  ],
   "scripts": {
-    "dev": "concurrently -n backend,frontend \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
-    "dev:frontend": "npm run dev -w apps/frontend",
-    "dev:backend": "npm run dev -w apps/backend",
-    "build": "npm run typecheck && npm -ws --if-present run build",
-    "typecheck:libs": "tsc --build",
-    "typecheck": "npm run typecheck:libs && npm -ws --if-present run typecheck"
+    "dev": "next dev src --port 3001",
+    "build": "npm run typecheck && next build src",
+    "start": "next start src --port 3001",
+    "typecheck": "tsc -p src/tsconfig.json --noEmit",
+    "prisma:generate": "prisma generate --schema src/lib/db/prisma/schema.prisma",
+    "prisma:validate": "prisma validate --schema src/lib/db/prisma/schema.prisma",
+    "prisma:migrate:dev": "prisma migrate dev --schema src/lib/db/prisma/schema.prisma",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema src/lib/db/prisma/schema.prisma",
+    "prisma:seed": "prisma db seed --schema src/lib/db/prisma/schema.prisma"
   },
   "private": true,
+  "dependencies": {
+    "@prisma/client": "^6.13.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
   "devDependencies": {
-    "concurrently": "^9.1.2",
+    "@types/node": "^25.3.3",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "next": "^16.0.0",
     "prettier": "^3.8.1",
+    "prisma": "^6.13.0",
+    "tsx": "^4.20.6",
     "typescript": "~5.9.2"
+  },
+  "prisma": {
+    "seed": "tsx src/lib/db/prisma/seed.ts"
   }
 }

@@ -22,17 +22,15 @@ services:
     networks:
       - budget_network
 
-  # Backend API Server
-  backend:
+  # Next.js App Router (src runtime)
+  web:
     build:
       context: .
-      dockerfile: Dockerfile.backend
-      args:
-        NODE_ENV: development
-    container_name: budget_backend
+      dockerfile: Dockerfile.frontend
+    container_name: budget_web
     environment:
       DATABASE_URL: postgresql://budget_user:budget_password@postgres:5432/budget_qlctnv
-      PORT: 3000
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
       NODE_ENV: development
       LOG_LEVEL: info
       SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
@@ -43,35 +41,16 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-change-in-production}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
     ports:
-      - "3000:3000"
+      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
-      - ./apps/backend/src:/app/apps/backend/src
+      - ./:/app
       - /app/node_modules
     networks:
       - budget_network
-    command: npm run dev -w apps/backend
-
-  # Frontend Development Server
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: budget_frontend
-    environment:
-      VITE_API_URL: http://localhost:3000/api
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-    volumes:
-      - ./apps/frontend/src:/app/apps/frontend/src
-      - /app/node_modules
-    networks:
-      - budget_network
-    command: npm run dev -w apps/frontend
+    command: npm run dev
 
   # pgAdmin for Database Management (optional)
   pgadmin:

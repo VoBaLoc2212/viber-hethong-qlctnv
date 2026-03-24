@@ -13,7 +13,7 @@ env:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:17-alpine
@@ -52,10 +52,13 @@ jobs:
           DATABASE_URL: postgresql://budget_user:budget_password@localhost:5432/budget_qlctnv_test
         run: npm run test --if-present
 
+      - name: Build Next.js app
+        run: npm run build
+
   build:
     needs: lint-and-test
     runs-on: ubuntu-latest
-    
+
     permissions:
       contents: read
       packages: write
@@ -95,7 +98,7 @@ jobs:
 
   security-scan:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
 

@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.2.0
+  description: Budget & Internal Finance Management API (scaffold in src/)
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: budgeting
+  - name: transactions
+  - name: approvals
+  - name: reports
+  - name: auth
+  - name: ai
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                required: [status]
+
+  /budgeting:
+    get:
+      operationId: getBudgetingScaffold
+      tags: [budgeting]
+      summary: Budgeting scaffold endpoint
+      responses:
+        "200":
+          description: Scaffold response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  status:
+                    type: string
+                required: [module, status]
+
+  /transactions:
+    get:
+      operationId: getTransactionsScaffold
+      tags: [transactions]
+      summary: Transactions scaffold endpoint
+      responses:
+        "200":
+          description: Scaffold response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  status:
+                    type: string
+                required: [module, status]
+
+  /approvals:
+    get:
+      operationId: getApprovalsScaffold
+      tags: [approvals]
+      summary: Approvals scaffold endpoint
+      responses:
+        "200":
+          description: Scaffold response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  status:
+                    type: string
+                required: [module, status]
+
+  /reports:
+    get:
+      operationId: getReportsScaffold
+      tags: [reports]
+      summary: Reports scaffold endpoint
+      responses:
+        "200":
+          description: Scaffold response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  status:
+                    type: string
+                required: [module, status]
+
+  /auth:
+    get:
+      operationId: getAuthScaffold
+      tags: [auth]
+      summary: Auth scaffold endpoint
+      responses:
+        "200":
+          description: Scaffold response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  status:
+                    type: string
+                required: [module, status]
+
+  /ai:
+    get:
+      operationId: getAiScaffold
+      tags: [ai]
+      summary: AI scaffold endpoint
+      responses:
+        "200":
+          description: Scaffold response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module:
+                    type: string
+                  status:
+                    type: string
+                required: [module, status]

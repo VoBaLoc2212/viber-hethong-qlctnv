@@ -1,0 +1,29 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Copy package files
+COPY package.json package-lock.json ./
+COPY apps/backend/package.json apps/backend/
+COPY apps/frontend/package.json apps/frontend/
+COPY lib/db/package.json lib/db/
+COPY lib/api-spec/package.json lib/api-spec/
+COPY lib/api-zod/package.json lib/api-zod/
+COPY lib/api-client-react/package.json lib/api-client-react/
+COPY scripts/package.json scripts/
+
+# Install dependencies
+RUN npm ci
+
+# Copy all source files
+COPY . .
+
+# Build the project
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["npm", "run", "start", "-w", "apps/backend"]

@@ -75,6 +75,12 @@ export const NAV_ITEMS: Array<{
     roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
   },
   {
+    href: "/budgets",
+    label: "Budgets",
+    icon: "budgets",
+    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+  },
+  {
     href: "/reports",
     label: "Reports",
     icon: "reports",

@@ -2,11 +2,27 @@ import { prisma } from "@/lib/db/prisma/client";
 import { type AuthContext, requireRole } from "@/modules/shared";
 import { AppError } from "@/modules/shared/errors/app-error";
 
+type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+
 type ApprovalListFilter = {
   page: number;
   limit: number;
-  status?: "PENDING" | "APPROVED" | "REJECTED";
+  status?: ApprovalStatus;
 };
+
+function approvalStatusWhere(status?: ApprovalStatus) {
+  if (!status) {
+    return {};
+  }
+
+  return {
+    OR: [{ status }, { statusV2: status }],
+  };
+}
+
+function effectiveApprovalStatus(status: string, statusV2: ApprovalStatus | null): ApprovalStatus {
+  return statusV2 ?? (status as ApprovalStatus);
+}
 
 export async function listApprovals(auth: AuthContext, filter: ApprovalListFilter) {
   requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
@@ -16,7 +32,7 @@ export async function listApprovals(auth: AuthContext, filter: ApprovalListFilte
   const skip = (page - 1) * limit;
 
   const where = {
-    status: filter.status,
+    ...approvalStatusWhere(filter.status),
     ...(auth.role === "MANAGER"
       ? { step: 1 }
       : auth.role === "ACCOUNTANT"
@@ -67,7 +83,7 @@ export async function listApprovals(auth: AuthContext, filter: ApprovalListFilte
       budgetId: row.transaction.budgetId,
       requesterId: row.transaction.createdById,
       step: row.step,
-      status: row.status,
+      status: effectiveApprovalStatus(row.status, row.statusV2),
       note: row.note,
       approvedAt: row.approvedAt?.toISOString() ?? null,
       rejectedAt: row.rejectedAt?.toISOString() ?? null,
@@ -111,6 +127,7 @@ export async function bootstrapApprovalRequests(auth: AuthContext, correlationId
           approverId: manager.id,
           step: 1,
           status: "PENDING",
+          statusV2: "PENDING",
         },
       });
 

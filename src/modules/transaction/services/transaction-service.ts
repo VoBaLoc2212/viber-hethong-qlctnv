@@ -28,6 +28,12 @@ function ensureIncomeStatus(status: TransactionStatus) {
   }
 }
 
+type ApprovalStatusCompat = "PENDING" | "APPROVED" | "REJECTED";
+
+function effectiveApprovalStatus(status: string, statusV2: ApprovalStatusCompat | null): ApprovalStatusCompat {
+  return statusV2 ?? (status as ApprovalStatusCompat);
+}
+
 async function getPolicyForBudgetTx(tx: Prisma.TransactionClient, budgetId: string) {
   const scoped = await tx.budgetControlPolicy.findUnique({ where: { budgetId } });
   if (scoped) return scoped;
@@ -51,6 +57,14 @@ function toTransactionView(row: {
   description: string | null;
   budgetId: string | null;
   departmentId: string | null;
+  recurringSourceId: string | null;
+  fxCurrency: string | null;
+  fxAmount: Prisma.Decimal | null;
+  fxRate: Prisma.Decimal | null;
+  baseCurrency: string | null;
+  baseAmount: Prisma.Decimal | null;
+  fxRateProvider: string | null;
+  fxRateFetchedAt: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -64,6 +78,14 @@ function toTransactionView(row: {
     description: row.description,
     budgetId: row.budgetId,
     departmentId: row.departmentId,
+    recurringSourceId: row.recurringSourceId,
+    fxCurrency: row.fxCurrency,
+    fxAmount: row.fxAmount ? decimalToString(row.fxAmount) : null,
+    fxRate: row.fxRate ? row.fxRate.toFixed(6) : null,
+    baseCurrency: row.baseCurrency,
+    baseAmount: row.baseAmount ? decimalToString(row.baseAmount) : null,
+    fxRateProvider: row.fxRateProvider,
+    fxRateFetchedAt: row.fxRateFetchedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -107,6 +129,19 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
   };
 }
 
+type TransactionSplitPayload = {
+  amount: string;
+  categoryCode?: string | null;
+  note?: string | null;
+};
+
+type TransactionAttachmentPayload = {
+  fileName: string;
+  fileUrl: string;
+  fileSize?: number | null;
+  mimeType?: string | null;
+};
+
 type CreateTransactionPayload = {
   type?: TransactionType;
   amount?: string;
@@ -115,6 +150,16 @@ type CreateTransactionPayload = {
   date?: string;
   description?: string | null;
   status?: TransactionStatus;
+  recurringSourceId?: string | null;
+  fxCurrency?: string | null;
+  fxAmount?: string | null;
+  fxRate?: string | null;
+  baseCurrency?: string | null;
+  baseAmount?: string | null;
+  fxRateProvider?: string | null;
+  fxRateFetchedAt?: string | null;
+  splits?: TransactionSplitPayload[];
+  attachments?: TransactionAttachmentPayload[];
 };
 
 export async function createTransaction(auth: AuthContext, payload: CreateTransactionPayload, correlationId: string) {
@@ -143,6 +188,18 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
   const txDate = payload.date ? new Date(payload.date) : new Date();
   if (Number.isNaN(txDate.getTime())) {
     throw new AppError("date is invalid", "INVALID_INPUT");
+  }
+
+  const fxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
+  if (payload.fxRateFetchedAt && (!fxRateFetchedAt || Number.isNaN(fxRateFetchedAt.getTime()))) {
+    throw new AppError("fxRateFetchedAt is invalid", "INVALID_INPUT");
+  }
+
+  if (payload.splits && payload.splits.length > 0) {
+    const splitTotal = payload.splits.reduce((acc, split) => addMoney(acc, split.amount), "0.00");
+    if (compareMoney(splitTotal, txAmount) !== 0) {
+      throw new AppError("Sum of splits must equal transaction amount", "INVALID_INPUT");
+    }
   }
 
   const created = await prisma.$transaction(async (db) => {
@@ -187,6 +244,14 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           currency: "VND",
           date: txDate,
           description: payload.description ?? null,
+          recurringSourceId: payload.recurringSourceId ?? null,
+          fxCurrency: payload.fxCurrency ?? null,
+          fxAmount: payload.fxAmount ?? null,
+          fxRate: payload.fxRate ?? null,
+          baseCurrency: payload.baseCurrency ?? null,
+          baseAmount: payload.baseAmount ?? null,
+          fxRateProvider: payload.fxRateProvider ?? null,
+          fxRateFetchedAt,
           budgetId: budget.id,
           departmentId: payload.departmentId ?? budget.departmentId,
           createdById: auth.userId,
@@ -197,6 +262,30 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         where: { id: budget.id },
         data: { reserved: nextReserved },
       });
+
+      if (payload.splits && payload.splits.length > 0) {
+        await db.transactionSplit.createMany({
+          data: payload.splits.map((split) => ({
+            transactionId: transaction.id,
+            amount: split.amount,
+            categoryCode: split.categoryCode ?? null,
+            note: split.note ?? null,
+          })),
+        });
+      }
+
+      if (payload.attachments && payload.attachments.length > 0) {
+        await db.transactionAttachment.createMany({
+          data: payload.attachments.map((attachment) => ({
+            transactionId: transaction.id,
+            fileName: attachment.fileName,
+            fileUrl: attachment.fileUrl,
+            fileSize: attachment.fileSize ?? null,
+            mimeType: attachment.mimeType ?? null,
+            uploadedById: auth.userId,
+          })),
+        });
+      }
 
       await db.auditLog.create({
         data: {
@@ -248,11 +337,43 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         currency: "VND",
         date: txDate,
         description: payload.description ?? null,
+        recurringSourceId: payload.recurringSourceId ?? null,
+        fxCurrency: payload.fxCurrency ?? null,
+        fxAmount: payload.fxAmount ?? null,
+        fxRate: payload.fxRate ?? null,
+        baseCurrency: payload.baseCurrency ?? null,
+        baseAmount: payload.baseAmount ?? null,
+        fxRateProvider: payload.fxRateProvider ?? null,
+        fxRateFetchedAt,
         budgetId: payload.budgetId ?? null,
         departmentId: payload.departmentId ?? null,
         createdById: auth.userId,
       },
     });
+
+    if (payload.splits && payload.splits.length > 0) {
+      await db.transactionSplit.createMany({
+        data: payload.splits.map((split) => ({
+          transactionId: transaction.id,
+          amount: split.amount,
+          categoryCode: split.categoryCode ?? null,
+          note: split.note ?? null,
+        })),
+      });
+    }
+
+    if (payload.attachments && payload.attachments.length > 0) {
+      await db.transactionAttachment.createMany({
+        data: payload.attachments.map((attachment) => ({
+          transactionId: transaction.id,
+          fileName: attachment.fileName,
+          fileUrl: attachment.fileUrl,
+          fileSize: attachment.fileSize ?? null,
+          mimeType: attachment.mimeType ?? null,
+          uploadedById: auth.userId,
+        })),
+      });
+    }
 
     await db.auditLog.create({
       data: {
@@ -378,12 +499,16 @@ export async function changeTransactionStatus(
         const currentApproval = payload.approvalId
           ? await db.approval.findUnique({
               where: { id: payload.approvalId },
-              select: { id: true, transactionId: true, step: true, status: true },
+              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
             })
           : await db.approval.findFirst({
-              where: { transactionId: tx.id, step: 1, status: "PENDING" },
+              where: {
+                transactionId: tx.id,
+                step: 1,
+                OR: [{ status: "PENDING" }, { statusV2: "PENDING" }],
+              },
               orderBy: { createdAt: "desc" },
-              select: { id: true, transactionId: true, step: true, status: true },
+              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
             });
 
         if (!currentApproval || currentApproval.transactionId !== tx.id) {
@@ -392,7 +517,7 @@ export async function changeTransactionStatus(
         if (currentApproval.step !== 1) {
           throw new AppError("Invalid approval step for manager action", "UNPROCESSABLE_ENTITY");
         }
-        if (currentApproval.status !== "PENDING") {
+        if (effectiveApprovalStatus(currentApproval.status, currentApproval.statusV2) !== "PENDING") {
           throw new AppError("Approval is already finalized", "CONFLICT");
         }
 
@@ -403,6 +528,7 @@ export async function changeTransactionStatus(
           data: {
             approverId: auth.userId,
             status: "APPROVED",
+            statusV2: "APPROVED",
             note: payload.note ?? null,
             approvedAt: new Date(),
             rejectedAt: null,
@@ -431,6 +557,7 @@ export async function changeTransactionStatus(
             approverId: accountant.id,
             step: 2,
             status: "PENDING",
+            statusV2: "PENDING",
           },
         });
 
@@ -443,7 +570,11 @@ export async function changeTransactionStatus(
         }
 
         const managerApproval = await db.approval.findFirst({
-          where: { transactionId: tx.id, step: 1, status: "APPROVED" },
+          where: {
+            transactionId: tx.id,
+            step: 1,
+            OR: [{ status: "APPROVED" }, { statusV2: "APPROVED" }],
+          },
           select: { id: true },
         });
         if (!managerApproval) {
@@ -453,12 +584,16 @@ export async function changeTransactionStatus(
         const currentApproval = payload.approvalId
           ? await db.approval.findUnique({
               where: { id: payload.approvalId },
-              select: { id: true, transactionId: true, step: true, status: true },
+              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
             })
           : await db.approval.findFirst({
-              where: { transactionId: tx.id, step: 2, status: "PENDING" },
+              where: {
+                transactionId: tx.id,
+                step: 2,
+                OR: [{ status: "PENDING" }, { statusV2: "PENDING" }],
+              },
               orderBy: { createdAt: "desc" },
-              select: { id: true, transactionId: true, step: true, status: true },
+              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
             });
         if (!currentApproval || currentApproval.transactionId !== tx.id) {
           throw new AppError("Approval not found", "NOT_FOUND");
@@ -466,7 +601,7 @@ export async function changeTransactionStatus(
         if (currentApproval.step !== 2) {
           throw new AppError("Invalid approval step for accountant action", "UNPROCESSABLE_ENTITY");
         }
-        if (currentApproval.status !== "PENDING") {
+        if (effectiveApprovalStatus(currentApproval.status, currentApproval.statusV2) !== "PENDING") {
           throw new AppError("Approval is already finalized", "CONFLICT");
         }
 
@@ -477,6 +612,7 @@ export async function changeTransactionStatus(
           data: {
             approverId: auth.userId,
             status: "APPROVED",
+            statusV2: "APPROVED",
             note: payload.note ?? null,
             approvedAt: new Date(),
             rejectedAt: null,
@@ -494,21 +630,21 @@ export async function changeTransactionStatus(
         const currentApproval = payload.approvalId
           ? await db.approval.findUnique({
               where: { id: payload.approvalId },
-              select: { id: true, transactionId: true, step: true, status: true },
+              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
             })
           : await db.approval.findFirst({
               where: {
                 transactionId: tx.id,
                 step: tx.status === "PENDING" ? 1 : 2,
-                status: "PENDING",
+                OR: [{ status: "PENDING" }, { statusV2: "PENDING" }],
               },
               orderBy: { createdAt: "desc" },
-              select: { id: true, transactionId: true, step: true, status: true },
+              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
             });
         if (!currentApproval || currentApproval.transactionId !== tx.id) {
           throw new AppError("Approval not found", "NOT_FOUND");
         }
-        if (currentApproval.status !== "PENDING") {
+        if (effectiveApprovalStatus(currentApproval.status, currentApproval.statusV2) !== "PENDING") {
           throw new AppError("Approval is already finalized", "CONFLICT");
         }
 
@@ -526,6 +662,7 @@ export async function changeTransactionStatus(
           data: {
             approverId: auth.userId,
             status: "REJECTED",
+            statusV2: "REJECTED",
             note: payload.reason ?? payload.note ?? null,
             approvedAt: null,
             rejectedAt: new Date(),

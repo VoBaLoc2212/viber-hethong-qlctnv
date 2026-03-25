@@ -5,11 +5,22 @@ export type LedgerEntry = {
   entryCode: string;
   type: LedgerEntryType;
   amount: string;
-  currency: "VND";
+  currency: string;
   referenceType: "TRANSACTION" | "BUDGET_TRANSFER" | "REIMBURSEMENT" | "RECONCILIATION";
   referenceId: string;
+  reversalOfId?: string | null;
+  fxCurrency?: string | null;
+  fxAmount?: string | null;
+  fxRate?: string | null;
+  baseCurrency?: string | null;
+  baseAmount?: string | null;
+  fxRateProvider?: string | null;
+  fxRateFetchedAt?: string | null;
+  reconciliationStatus?: "UNRECONCILED" | "RECONCILED" | "EXCEPTION";
+  reconciledAt?: string | null;
+  reconciledById?: string | null;
+  reconciliationRef?: string | null;
   metadata?: Record<string, unknown>;
-  createdBy: string;
   createdAt: string;
 };
 

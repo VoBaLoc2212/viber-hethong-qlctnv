@@ -55,6 +55,25 @@ export async function POST(request: NextRequest) {
       date?: string;
       description?: string | null;
       status?: TransactionStatus;
+      recurringSourceId?: string | null;
+      fxCurrency?: string | null;
+      fxAmount?: string | number | null;
+      fxRate?: string | number | null;
+      baseCurrency?: string | null;
+      baseAmount?: string | number | null;
+      fxRateProvider?: string | null;
+      fxRateFetchedAt?: string | null;
+      splits?: Array<{
+        amount: string | number;
+        categoryCode?: string | null;
+        note?: string | null;
+      }>;
+      attachments?: Array<{
+        fileName: string;
+        fileUrl: string;
+        fileSize?: number | null;
+        mimeType?: string | null;
+      }>;
     }>(request);
 
     const transaction = await createTransaction(
@@ -67,6 +86,30 @@ export async function POST(request: NextRequest) {
         date: body.date,
         description: body.description ?? null,
         status: body.status,
+        recurringSourceId: body.recurringSourceId ?? null,
+        fxCurrency: body.fxCurrency ?? null,
+        fxAmount: normalizeAmount(body.fxAmount ?? undefined) ?? null,
+        fxRate:
+          typeof body.fxRate === "number"
+            ? body.fxRate.toFixed(6)
+            : typeof body.fxRate === "string"
+              ? body.fxRate.trim()
+              : null,
+        baseCurrency: body.baseCurrency ?? null,
+        baseAmount: normalizeAmount(body.baseAmount ?? undefined) ?? null,
+        fxRateProvider: body.fxRateProvider ?? null,
+        fxRateFetchedAt: body.fxRateFetchedAt ?? null,
+        splits: body.splits?.map((split) => ({
+          amount: normalizeAmount(split.amount) ?? "0.00",
+          categoryCode: split.categoryCode ?? null,
+          note: split.note ?? null,
+        })),
+        attachments: body.attachments?.map((attachment) => ({
+          fileName: attachment.fileName,
+          fileUrl: attachment.fileUrl,
+          fileSize: attachment.fileSize ?? null,
+          mimeType: attachment.mimeType ?? null,
+        })),
       },
       correlationId,
     );

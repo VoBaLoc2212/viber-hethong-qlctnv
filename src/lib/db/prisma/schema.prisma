@@ -29,6 +29,26 @@ enum TransactionStatus {
   REVERSED
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  ANNUALLY
+}
+
+enum ReconciliationStatus {
+  UNRECONCILED
+  RECONCILED
+  EXCEPTION
+}
+
 enum LedgerEntryType {
   EXPENSE
   INCOME
@@ -50,6 +70,9 @@ model User {
 
   transactions Transaction[]
   approvals    Approval[]        @relation("Approver")
+  uploadedAttachments TransactionAttachment[] @relation("AttachmentUploader")
+  recurringTransactions RecurringTransaction[] @relation("RecurringCreator")
+  reconciledLedgerEntries LedgerEntry[] @relation("LedgerReconciler")
   ledgerEntries LedgerEntry[]
   budgetTransfers BudgetTransfer[]
   auditLogs    AuditLog[]
@@ -65,8 +88,9 @@ model Department {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  budgets      Budget[]
-  transactions Transaction[]
+  budgets               Budget[]
+  transactions          Transaction[]
+  recurringTransactions RecurringTransaction[]
 }
 
 model Budget {
@@ -85,8 +109,9 @@ model Budget {
   childBudgets      Budget[]             @relation("BudgetHierarchy")
   outgoingTransfers BudgetTransfer[]     @relation("TransferFromBudget")
   incomingTransfers BudgetTransfer[]     @relation("TransferToBudget")
-  policies          BudgetControlPolicy[]
-  transactions      Transaction[]
+  policies              BudgetControlPolicy[]
+  transactions          Transaction[]
+  recurringTransactions RecurringTransaction[]
 
   @@unique([departmentId, period])
   @@index([departmentId])
@@ -103,20 +128,33 @@ model Transaction {
   date        DateTime
   description String?
 
-  budgetId     String?
-  departmentId String?
-  createdById  String
+  fxCurrency        String?
+  fxAmount          Decimal? @db.Decimal(18, 2)
+  fxRate            Decimal? @db.Decimal(18, 6)
+  baseCurrency      String?
+  baseAmount        Decimal? @db.Decimal(18, 2)
+  fxRateProvider    String?
+  fxRateFetchedAt   DateTime?
+
+  recurringSourceId String?
+  budgetId          String?
+  departmentId      String?
+  createdById       String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  budget     Budget?      @relation(fields: [budgetId], references: [id])
-  department Department?  @relation(fields: [departmentId], references: [id])
-  createdBy  User         @relation(fields: [createdById], references: [id])
+  recurringSource RecurringTransaction? @relation(fields: [recurringSourceId], references: [id])
+  budget          Budget?               @relation(fields: [budgetId], references: [id])
+  department      Department?           @relation(fields: [departmentId], references: [id])
+  createdBy       User                  @relation(fields: [createdById], references: [id])
 
-  approvals Approval[]
-  postings  CashbookPosting[]
+  approvals   Approval[]
+  postings    CashbookPosting[]
+  attachments TransactionAttachment[]
+  splits      TransactionSplit[]
 
+  @@index([recurringSourceId])
   @@index([budgetId])
   @@index([departmentId])
   @@index([status])
@@ -129,6 +167,7 @@ model Approval {
   approverId    String
   step          Int      @default(1)
   status        String
+  statusV2      ApprovalStatus?
   note          String?
   approvedAt    DateTime?
   rejectedAt    DateTime?
@@ -139,6 +178,7 @@ model Approval {
 
   @@index([transactionId, step])
   @@index([approverId, status])
+  @@index([approverId, statusV2])
 }
 
 model CashbookAccount {
@@ -177,13 +217,30 @@ model LedgerEntry {
   metadata      Json?
   reversalOfId  String?
   createdById   String
+
+  fxCurrency      String?
+  fxAmount        Decimal? @db.Decimal(18, 2)
+  fxRate          Decimal? @db.Decimal(18, 6)
+  baseCurrency    String?
+  baseAmount      Decimal? @db.Decimal(18, 2)
+  fxRateProvider  String?
+  fxRateFetchedAt DateTime?
+
+  reconciliationStatus ReconciliationStatus @default(UNRECONCILED)
+  reconciledAt         DateTime?
+  reconciledById       String?
+  reconciliationRef    String?
+
   createdAt     DateTime        @default(now())
 
   createdBy User @relation(fields: [createdById], references: [id])
+  reconciledBy User? @relation("LedgerReconciler", fields: [reconciledById], references: [id])
   reversalOf LedgerEntry? @relation("LedgerReversal", fields: [reversalOfId], references: [id])
   reversals LedgerEntry[] @relation("LedgerReversal")
 
   @@index([referenceType, referenceId])
+  @@index([reconciliationStatus])
+  @@index([reconciledById])
   @@index([createdAt])
   @@unique([reversalOfId], map: "ledger_unique_reversal_target")
 }
@@ -215,6 +272,62 @@ model Reimbursement {
   netAmount      Decimal? @db.Decimal(18, 2)
   settledAt      DateTime?
   createdAt      DateTime @default(now())
+}
+
+model RecurringTransaction {
+  id           String             @id @default(uuid())
+  name         String
+  type         TransactionType
+  amount       Decimal            @db.Decimal(18, 2)
+  currency     String             @default("VND")
+  frequency    RecurringFrequency
+  nextRunAt    DateTime
+  lastRunAt    DateTime?
+  active       Boolean            @default(true)
+  budgetId     String?
+  departmentId String?
+  createdById  String
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  budget       Budget?            @relation(fields: [budgetId], references: [id])
+  department   Department?        @relation(fields: [departmentId], references: [id])
+  createdBy    User               @relation("RecurringCreator", fields: [createdById], references: [id])
+  transactions Transaction[]
+
+  @@index([active, nextRunAt])
+  @@index([budgetId])
+  @@index([departmentId])
+}
+
+model TransactionAttachment {
+  id            String   @id @default(uuid())
+  transactionId String
+  fileName      String
+  fileUrl       String
+  fileSize      Int?
+  mimeType      String?
+  uploadedById  String
+  createdAt     DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+  uploadedBy  User        @relation("AttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([transactionId, createdAt])
+  @@index([uploadedById])
+}
+
+model TransactionSplit {
+  id            String   @id @default(uuid())
+  transactionId String
+  amount        Decimal  @db.Decimal(18, 2)
+  categoryCode  String?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
 }
 
 model BudgetControlPolicy {

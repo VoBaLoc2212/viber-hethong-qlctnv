@@ -78,6 +78,17 @@ export type LedgerEntryItem = {
   referenceId: string;
   reversalOfId?: string | null;
   reversalOfEntryCode?: string | null;
+  fxCurrency?: string | null;
+  fxAmount?: string | null;
+  fxRate?: string | null;
+  baseCurrency?: string | null;
+  baseAmount?: string | null;
+  fxRateProvider?: string | null;
+  fxRateFetchedAt?: string | null;
+  reconciliationStatus?: "UNRECONCILED" | "RECONCILED" | "EXCEPTION";
+  reconciledAt?: string | null;
+  reconciledById?: string | null;
+  reconciliationRef?: string | null;
   metadata?: unknown;
   createdAt: string;
   createdBy: {
@@ -87,4 +98,11 @@ export type LedgerEntryItem = {
     email: string;
     role: UserRole;
   };
+  reconciledBy?: {
+    id: string;
+    username: string;
+    fullName: string;
+    email: string;
+    role: UserRole;
+  } | null;
 };

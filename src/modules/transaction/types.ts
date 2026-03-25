@@ -6,12 +6,20 @@ export type Transaction = {
   transactionCode: string;
   type: TransactionType;
   amount: string;
-  departmentId?: string;
-  categoryId?: string;
+  currency: string;
+  departmentId?: string | null;
+  budgetId?: string | null;
+  recurringSourceId?: string | null;
+  fxCurrency?: string | null;
+  fxAmount?: string | null;
+  fxRate?: string | null;
+  baseCurrency?: string | null;
+  baseAmount?: string | null;
+  fxRateProvider?: string | null;
+  fxRateFetchedAt?: string | null;
   date: string;
-  description?: string;
+  description?: string | null;
   status: TransactionStatus;
-  createdBy: string;
   createdAt: string;
 };
 

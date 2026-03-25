@@ -38,15 +38,23 @@ enum LedgerEntryType {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  fullName  String
-  role      UserRole
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  username     String   @unique
+  email        String   @unique
+  fullName     String
+  passwordHash String
+  role         UserRole
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   transactions Transaction[]
-  approvals    Approval[] @relation("Approver")
+  approvals    Approval[]        @relation("Approver")
+  ledgerEntries LedgerEntry[]
+  budgetTransfers BudgetTransfer[]
+  auditLogs    AuditLog[]
+
+  @@index([role])
 }
 
 model Department {
@@ -68,10 +76,20 @@ model Budget {
   amount       Decimal  @db.Decimal(18, 2)
   reserved     Decimal  @default(0) @db.Decimal(18, 2)
   used         Decimal  @default(0) @db.Decimal(18, 2)
+  parentBudgetId String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   department Department @relation(fields: [departmentId], references: [id])
+  parentBudget Budget?  @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id])
+  childBudgets Budget[] @relation("BudgetHierarchy")
+  outgoingTransfers BudgetTransfer[] @relation("TransferFromBudget")
+  incomingTransfers BudgetTransfer[] @relation("TransferToBudget")
+  policies BudgetControlPolicy[]
+
+  @@unique([departmentId, period])
+  @@index([departmentId])
+  @@index([parentBudgetId])
 }
 
 model Transaction {
@@ -131,6 +149,8 @@ model CashbookPosting {
 
   account     CashbookAccount @relation(fields: [accountId], references: [id])
   transaction Transaction     @relation(fields: [transactionId], references: [id])
+
+  @@index([transactionId])
 }
 
 model LedgerEntry {
@@ -142,20 +162,36 @@ model LedgerEntry {
   referenceType String
   referenceId   String
   metadata      Json?
+  reversalOfId  String?
   createdById   String
   createdAt     DateTime        @default(now())
 
   createdBy User @relation(fields: [createdById], references: [id])
+  reversalOf LedgerEntry? @relation("LedgerReversal", fields: [reversalOfId], references: [id])
+  reversals LedgerEntry[] @relation("LedgerReversal")
+
+  @@index([referenceType, referenceId])
+  @@index([createdAt])
+  @@unique([reversalOfId], map: "ledger_unique_reversal_target")
 }
 
 model BudgetTransfer {
-  id            String   @id @default(uuid())
-  fromBudgetId  String
-  toBudgetId    String
-  amount        Decimal  @db.Decimal(18, 2)
-  reason        String?
-  createdById   String
-  createdAt     DateTime @default(now())
+  id             String   @id @default(uuid())
+  fromBudgetId   String
+  toBudgetId     String
+  amount         Decimal  @db.Decimal(18, 2)
+  reason         String?
+  idempotencyKey String   @unique
+  createdById    String
+  createdAt      DateTime @default(now())
+
+  fromBudget Budget @relation("TransferFromBudget", fields: [fromBudgetId], references: [id])
+  toBudget   Budget @relation("TransferToBudget", fields: [toBudgetId], references: [id])
+  createdBy  User   @relation(fields: [createdById], references: [id])
+
+  @@index([fromBudgetId])
+  @@index([toBudgetId])
+  @@index([createdAt])
 }
 
 model Reimbursement {
@@ -168,12 +204,36 @@ model Reimbursement {
   createdAt      DateTime @default(now())
 }
 
+model BudgetControlPolicy {
+  id                  String   @id @default(uuid())
+  budgetId            String?
+  warningThresholdPct Int      @default(80)
+  hardStopEnabled     Boolean  @default(true)
+  createdById         String?
+  updatedById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  budget Budget? @relation(fields: [budgetId], references: [id])
+
+  @@unique([budgetId])
+}
+
 model AuditLog {
-  id         String   @id @default(uuid())
-  actorId    String
-  action     String
-  entityType String
-  entityId   String
-  payload    Json?
-  createdAt  DateTime @default(now())
+  id            String   @id @default(uuid())
+  actorId       String
+  action        String
+  entityType    String
+  entityId      String
+  result        String   @default("SUCCESS")
+  correlationId String?
+  payload       Json?
+  createdAt     DateTime @default(now())
+
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@index([correlationId])
 }

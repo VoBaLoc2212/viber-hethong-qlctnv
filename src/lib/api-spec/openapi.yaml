@@ -1,19 +1,114 @@
 openapi: 3.1.0
 info:
-  title: Api
-  version: 0.2.0
-  description: Budget & Internal Finance Management API (scaffold in src/)
+  title: Budget & Internal Finance Management API
+  version: 1.0.0
+  description: API cho modules Budgeting (1), Budget Control (4), Security & Logs (9)
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-  - name: budgeting
-  - name: transactions
-  - name: approvals
-  - name: reports
   - name: auth
-  - name: ai
+  - name: users
+  - name: budgeting
+  - name: controls
+  - name: logs
+  - name: ledger
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    limit:
+      in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    correlationId:
+      in: header
+      name: x-correlation-id
+      required: false
+      schema:
+        type: string
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          additionalProperties: true
+        meta:
+          type: object
+          additionalProperties: true
+      required: [data, meta]
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          nullable: true
+        correlationId:
+          type: string
+      required: [code, message, correlationId]
+    UserRole:
+      type: string
+      enum: [EMPLOYEE, MANAGER, ACCOUNTANT, FINANCE_ADMIN, AUDITOR]
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/UserRole"
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, username, fullName, email, role, isActive, createdAt]
+    Budget:
+      type: object
+      properties:
+        id:
+          type: string
+        departmentId:
+          type: string
+        period:
+          type: string
+        amount:
+          type: string
+        reserved:
+          type: string
+        used:
+          type: string
+        available:
+          type: string
+        parentBudgetId:
+          type: string
+          nullable: true
+      required: [id, departmentId, period, amount, reserved, used, available]
 paths:
   /healthz:
     get:
@@ -32,116 +127,542 @@ paths:
                     type: string
                 required: [status]
 
-  /budgeting:
-    get:
-      operationId: getBudgetingScaffold
-      tags: [budgeting]
-      summary: Budgeting scaffold endpoint
-      responses:
-        "200":
-          description: Scaffold response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  module:
-                    type: string
-                  status:
-                    type: string
-                required: [module, status]
-
-  /transactions:
-    get:
-      operationId: getTransactionsScaffold
-      tags: [transactions]
-      summary: Transactions scaffold endpoint
-      responses:
-        "200":
-          description: Scaffold response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  module:
-                    type: string
-                  status:
-                    type: string
-                required: [module, status]
-
-  /approvals:
-    get:
-      operationId: getApprovalsScaffold
-      tags: [approvals]
-      summary: Approvals scaffold endpoint
-      responses:
-        "200":
-          description: Scaffold response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  module:
-                    type: string
-                  status:
-                    type: string
-                required: [module, status]
-
-  /reports:
-    get:
-      operationId: getReportsScaffold
-      tags: [reports]
-      summary: Reports scaffold endpoint
-      responses:
-        "200":
-          description: Scaffold response
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  module:
-                    type: string
-                  status:
-                    type: string
-                required: [module, status]
-
-  /auth:
-    get:
-      operationId: getAuthScaffold
+  /auth/login:
+    post:
+      operationId: login
       tags: [auth]
-      summary: Auth scaffold endpoint
+      summary: Đăng nhập lấy JWT
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+              required: [username, password]
       responses:
         "200":
-          description: Scaffold response
+          description: Login thành công
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  module:
-                    type: string
-                  status:
-                    type: string
-                required: [module, status]
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
-  /ai:
-    get:
-      operationId: getAiScaffold
-      tags: [ai]
-      summary: AI scaffold endpoint
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Tạo user mới (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                role:
+                  $ref: "#/components/schemas/UserRole"
+                email:
+                  type: string
+                  format: email
+                fullName:
+                  type: string
+              required: [username, password, role, email]
       responses:
-        "200":
-          description: Scaffold response
+        "201":
+          description: User created
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  module:
-                    type: string
-                  status:
-                    type: string
-                required: [module, status]
+                $ref: "#/components/schemas/SuccessResponse"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: me
+      tags: [auth]
+      summary: Lấy thông tin user hiện tại
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: Danh sách users (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /users/{id}:
+    get:
+      operationId: getUserById
+      tags: [users]
+      summary: Chi tiết user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      operationId: updateUserById
+      tags: [users]
+      summary: Cập nhật user (admin hoặc chính user đó)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                fullName:
+                  type: string
+                password:
+                  type: string
+                role:
+                  $ref: "#/components/schemas/UserRole"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    delete:
+      operationId: deleteUserById
+      tags: [users]
+      summary: Xóa user (admin only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /logs:
+    get:
+      operationId: listAuditLogs
+      tags: [logs]
+      summary: Lấy audit logs (admin/auditor)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: entityType
+          schema:
+            type: string
+        - in: query
+          name: entityId
+          schema:
+            type: string
+        - in: query
+          name: fromDate
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: toDate
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: userId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /logs/immutable:
+    post:
+      operationId: createImmutableLog
+      tags: [logs]
+      summary: Internal endpoint ghi log immutable
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                entityType:
+                  type: string
+                entityId:
+                  type: string
+                result:
+                  type: string
+                payload:
+                  nullable: true
+              required: [action, entityType, entityId]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /budgets:
+    get:
+      operationId: listBudgets
+      tags: [budgeting]
+      summary: Lấy danh sách ngân sách
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: departmentId
+          schema:
+            type: string
+        - in: query
+          name: period
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List budgets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      operationId: createBudget
+      tags: [budgeting]
+      summary: Tạo ngân sách (finance admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                departmentId:
+                  type: string
+                period:
+                  type: string
+                amount:
+                  type: string
+                parentBudgetId:
+                  type: string
+                  nullable: true
+              required: [departmentId, period, amount]
+      responses:
+        "201":
+          description: Created budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /budgets/{id}:
+    get:
+      operationId: getBudgetById
+      tags: [budgeting]
+      summary: Lấy chi tiết ngân sách
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Budget detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    put:
+      operationId: updateBudgetById
+      tags: [budgeting]
+      summary: Cập nhật ngân sách (finance admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: string
+                parentBudgetId:
+                  type: string
+                  nullable: true
+              required: [amount]
+      responses:
+        "200":
+          description: Updated budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /budgets/{id}/status:
+    get:
+      operationId: budgetStatus
+      tags: [budgeting]
+      summary: Trạng thái ngân sách (available/warning)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Budget status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /budgets/{id}/transfer:
+    post:
+      operationId: transferBudget
+      tags: [budgeting]
+      summary: Chuyển ngân sách
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: idempotency-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                toBudgetId:
+                  type: string
+                amount:
+                  type: string
+                reason:
+                  type: string
+              required: [toBudgetId, amount]
+      responses:
+        "201":
+          description: Transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /controls/hard-stop:
+    post:
+      operationId: configureHardStop
+      tags: [controls]
+      summary: Cấu hình hard stop
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                budgetId:
+                  type: string
+                  nullable: true
+                enabled:
+                  type: boolean
+                warningThresholdPct:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+              required: [enabled]
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /ledger:
+    get:
+      operationId: listLedgerEntries
+      tags: [ledger]
+      summary: Lấy ledger entries (read-only)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: referenceType
+          schema:
+            type: string
+        - in: query
+          name: referenceId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Ledger entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /ledger/{id}/reversal:
+    post:
+      operationId: reverseLedgerEntry
+      tags: [ledger]
+      summary: Tạo bút toán đảo chiều
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: idempotency-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+              required: [reason]
+      responses:
+        "201":
+          description: Reversal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"

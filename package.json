@@ -11,15 +11,20 @@
     "prisma:validate": "prisma validate --schema src/lib/db/prisma/schema.prisma",
     "prisma:migrate:dev": "prisma migrate dev --schema src/lib/db/prisma/schema.prisma",
     "prisma:migrate:deploy": "prisma migrate deploy --schema src/lib/db/prisma/schema.prisma",
-    "prisma:seed": "prisma db seed --schema src/lib/db/prisma/schema.prisma"
+    "prisma:seed": "prisma db seed --schema src/lib/db/prisma/schema.prisma",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:watch": "vitest"
   },
   "private": true,
   "dependencies": {
     "@prisma/client": "^6.13.0",
+    "jsonwebtoken": "^9.0.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
@@ -27,7 +32,8 @@
     "prettier": "^3.8.1",
     "prisma": "^6.13.0",
     "tsx": "^4.20.6",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.4"
   },
   "prisma": {
     "seed": "tsx src/lib/db/prisma/seed.ts"

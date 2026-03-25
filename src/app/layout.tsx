@@ -1,3 +1,5 @@
+import { AppNav } from "@/components/app-nav";
+
 import "./globals.css";
 
 export default function RootLayout({
@@ -7,7 +9,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body>{children}</body>
+      <body>
+        <AppNav />
+        {children}
+      </body>
     </html>
   );
 }

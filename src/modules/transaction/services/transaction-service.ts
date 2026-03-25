@@ -46,6 +46,43 @@ async function getPolicyForBudgetTx(tx: Prisma.TransactionClient, budgetId: stri
   return globalPolicy ?? { hardStopEnabled: true, warningThresholdPct: 80 };
 }
 
+async function createCashbookPostingForExecution(
+  tx: Prisma.TransactionClient,
+  transactionId: string,
+  amount: string,
+  direction: "IN" | "OUT",
+) {
+  const account = await tx.cashbookAccount.findFirst({
+    orderBy: { createdAt: "asc" },
+    select: { id: true, balance: true },
+  });
+
+  if (!account) {
+    throw new AppError("No cashbook account available for execution", "CONFLICT");
+  }
+
+  const nextBalance = direction === "IN" ? addMoney(decimalToString(account.balance), amount) : addMoney(decimalToString(account.balance), `-${amount}`);
+
+  await tx.cashbookAccount.update({
+    where: { id: account.id },
+    data: { balance: nextBalance },
+  });
+
+  const posting = await tx.cashbookPosting.create({
+    data: {
+      accountId: account.id,
+      transactionId,
+      direction,
+      amount,
+    },
+  });
+
+  return {
+    postingId: posting.id,
+    accountId: account.id,
+  };
+}
+
 function toTransactionView(row: {
   id: string;
   code: string;
@@ -407,6 +444,8 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         },
       });
 
+      const posting = await createCashbookPostingForExecution(db, transaction.id, txAmount, "IN");
+
       await writeAuditLog({
         actorId: auth.userId,
         action: "TRANSACTION_EXECUTE",
@@ -415,6 +454,8 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         correlationId,
         payload: {
           ledgerEntryId: entry.id,
+          cashbookPostingId: posting.postingId,
+          cashbookAccountId: posting.accountId,
         },
       });
     }
@@ -724,6 +765,8 @@ export async function changeTransactionStatus(
           },
         });
 
+        const posting = await createCashbookPostingForExecution(db, tx.id, decimalToString(tx.amount), "OUT");
+
         await db.auditLog.create({
           data: {
             actorId: auth.userId,
@@ -733,6 +776,8 @@ export async function changeTransactionStatus(
             correlationId,
             payload: {
               ledgerEntryId: ledger.id,
+              cashbookPostingId: posting.postingId,
+              cashbookAccountId: posting.accountId,
             },
           },
         });

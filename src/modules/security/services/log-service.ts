@@ -14,6 +14,14 @@ type LogFilter = {
   userId?: string;
 };
 
+type ImmutableLogPayload = {
+  action?: string;
+  entityType?: string;
+  entityId?: string;
+  result?: string;
+  payload?: unknown;
+};
+
 export async function listLogs(auth: AuthContext, filter: LogFilter) {
   requireRole(auth, ["FINANCE_ADMIN", "AUDITOR"]);
 
@@ -65,31 +73,26 @@ export async function listLogs(auth: AuthContext, filter: LogFilter) {
   };
 }
 
-export async function createImmutableLog(
-  auth: AuthContext,
-  payload: {
-    action?: string;
-    entityType?: string;
-    entityId?: string;
-    result?: string;
-    payload?: unknown;
-  },
+async function createImmutableLogEntry(
+  actorId: string,
+  payload: ImmutableLogPayload,
   correlationId: string,
+  source?: { sourceType: string; sourceId: string },
 ) {
-  requireRole(auth, ["FINANCE_ADMIN", "ACCOUNTANT"]);
-
   if (!payload.action || !payload.entityType || !payload.entityId) {
     throw new AppError("Missing required fields", "INVALID_INPUT");
   }
 
   const log = await writeAuditLog({
-    actorId: auth.userId,
+    actorId,
     action: payload.action,
     entityType: payload.entityType,
     entityId: payload.entityId,
     result: payload.result ?? "SUCCESS",
     correlationId,
     payload: payload.payload as Prisma.InputJsonValue | undefined,
+    sourceType: source?.sourceType,
+    sourceId: source?.sourceId,
   });
 
   return {
@@ -100,6 +103,28 @@ export async function createImmutableLog(
     result: log.result,
     correlationId: log.correlationId,
     payload: log.payload,
+    sourceType: log.sourceType,
+    sourceId: log.sourceId,
     createdAt: log.createdAt.toISOString(),
   };
+}
+
+export async function createImmutableLog(auth: AuthContext, payload: ImmutableLogPayload, correlationId: string) {
+  requireRole(auth, ["FINANCE_ADMIN", "ACCOUNTANT"]);
+
+  return createImmutableLogEntry(auth.userId, payload, correlationId, {
+    sourceType: "USER",
+    sourceId: auth.userId,
+  });
+}
+
+export async function createInternalImmutableLog(
+  payload: ImmutableLogPayload,
+  correlationId: string,
+  source: { serviceId: string; actorId: string },
+) {
+  return createImmutableLogEntry(source.actorId, payload, correlationId, {
+    sourceType: "SERVICE",
+    sourceId: source.serviceId,
+  });
 }

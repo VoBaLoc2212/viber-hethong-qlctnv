@@ -7,12 +7,13 @@ export const ROLE_LANDING_PATH: Record<UserRole, string> = {
   EMPLOYEE: "/transactions",
   MANAGER: "/budgeting",
   ACCOUNTANT: "/budgeting",
-  FINANCE_ADMIN: "/reports",
-  AUDITOR: "/reports",
+  FINANCE_ADMIN: "/security",
+  AUDITOR: "/security",
 };
 
 export const ROUTE_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
-  { matcher: /^\/reports(?:\/.*)?$/, roles: ["FINANCE_ADMIN", "ACCOUNTANT", "AUDITOR"] },
+  { matcher: /^\/reports(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
+  { matcher: /^\/security(?:\/.*)?$/, roles: ["FINANCE_ADMIN", "ACCOUNTANT", "AUDITOR"] },
   { matcher: /^\/budgeting(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
   { matcher: /^\/budgets(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
   { matcher: /^\/approvals(?:\/.*)?$/, roles: ["MANAGER", "FINANCE_ADMIN"] },
@@ -52,7 +53,7 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
 export const NAV_ITEMS: Array<{
   href: string;
   label: string;
-  icon: "dashboard" | "transactions" | "budgets" | "reports" | "assistant";
+  icon: "dashboard" | "transactions" | "budgets" | "reports" | "security" | "assistant";
   roles: UserRole[];
 }> = [
   {
@@ -68,8 +69,8 @@ export const NAV_ITEMS: Array<{
     roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
   },
   {
-    href: "/budgets",
-    label: "Budgets",
+    href: "/budgeting",
+    label: "Budgeting",
     icon: "budgets",
     roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
   },
@@ -77,6 +78,12 @@ export const NAV_ITEMS: Array<{
     href: "/reports",
     label: "Reports",
     icon: "reports",
+    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+  },
+  {
+    href: "/security",
+    label: "Security",
+    icon: "security",
     roles: ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
   },
   {

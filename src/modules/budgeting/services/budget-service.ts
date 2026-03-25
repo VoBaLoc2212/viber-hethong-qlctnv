@@ -94,6 +94,20 @@ function ensureMoneyInput(value: string | undefined, fieldName: string) {
   }
 }
 
+function parseTransferDirection(payload: Prisma.JsonValue | null, budgetId: string) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+
+  const value = payload as Record<string, unknown>;
+  const fromBudgetId = typeof value.fromBudgetId === "string" ? value.fromBudgetId : null;
+  const toBudgetId = typeof value.toBudgetId === "string" ? value.toBudgetId : null;
+
+  if (fromBudgetId === budgetId) return "OUT";
+  if (toBudgetId === budgetId) return "IN";
+  return null;
+}
+
 export async function listBudgets(auth: AuthContext, filter: BudgetFilter) {
   requireRole(auth, ["FINANCE_ADMIN", "MANAGER", "ACCOUNTANT", "AUDITOR"]);
 
@@ -128,6 +142,15 @@ export async function createBudget(auth: AuthContext, payload: CreateBudgetPaylo
   ensureMoneyInput(payload.amount, "amount");
   if (!payload.departmentId || !payload.period) {
     throw new AppError("departmentId and period are required", "INVALID_INPUT");
+  }
+
+  const department = await prisma.department.findUnique({
+    where: { id: payload.departmentId },
+    select: { id: true },
+  });
+
+  if (!department) {
+    throw new AppError("Department not found", "NOT_FOUND");
   }
 
   const budget = await prisma.budget.create({
@@ -213,6 +236,106 @@ export async function updateBudgetById(
   });
 
   return updatedView;
+}
+
+export async function getBudgetHistory(auth: AuthContext, id: string) {
+  requireRole(auth, ["FINANCE_ADMIN", "MANAGER", "ACCOUNTANT", "AUDITOR"]);
+
+  const budget = await prisma.budget.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+
+  if (!budget) {
+    throw new AppError("Budget not found", "NOT_FOUND");
+  }
+
+  const logs = await prisma.auditLog.findMany({
+    where: {
+      OR: [
+        { entityType: "BUDGET", entityId: id },
+        { entityType: "BUDGET_TRANSFER", payload: { path: ["fromBudgetId"], equals: id } },
+        { entityType: "BUDGET_TRANSFER", payload: { path: ["toBudgetId"], equals: id } },
+      ],
+    },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      id: true,
+      action: true,
+      entityType: true,
+      entityId: true,
+      result: true,
+      actorId: true,
+      correlationId: true,
+      payload: true,
+      createdAt: true,
+    },
+    take: 200,
+  });
+
+  return logs.map((log) => ({
+    id: log.id,
+    action: log.action,
+    entityType: log.entityType,
+    entityId: log.entityId,
+    result: log.result,
+    actorId: log.actorId,
+    correlationId: log.correlationId,
+    direction: log.entityType === "BUDGET_TRANSFER" ? parseTransferDirection(log.payload, id) : null,
+    payload: log.payload,
+    createdAt: log.createdAt.toISOString(),
+  }));
+}
+
+export async function deleteBudgetById(auth: AuthContext, id: string, correlationId: string) {
+  requireRole(auth, ["FINANCE_ADMIN"]);
+
+  const budget = await prisma.budget.findUnique({ where: { id } });
+  if (!budget) {
+    throw new AppError("Budget not found", "NOT_FOUND");
+  }
+
+  const [childBudgetCount, transactionCount, recurringCount, transferCount] = await Promise.all([
+    prisma.budget.count({ where: { parentBudgetId: id } }),
+    prisma.transaction.count({ where: { budgetId: id } }),
+    prisma.recurringTransaction.count({ where: { budgetId: id } }),
+    prisma.budgetTransfer.count({ where: { OR: [{ fromBudgetId: id }, { toBudgetId: id }] } }),
+  ]);
+
+  if (childBudgetCount > 0 || transactionCount > 0 || recurringCount > 0 || transferCount > 0) {
+    throw new AppError(
+      "Cannot delete budget with existing dependencies",
+      "CONFLICT",
+      {
+        childBudgetCount,
+        transactionCount,
+        recurringCount,
+        transferCount,
+      },
+      409,
+    );
+  }
+
+  await prisma.budget.delete({ where: { id } });
+
+  await writeAuditLog({
+    actorId: auth.userId,
+    action: "BUDGET_DELETE",
+    entityType: "BUDGET",
+    entityId: id,
+    correlationId,
+    payload: {
+      departmentId: budget.departmentId,
+      period: budget.period,
+      amount: decimalToString(budget.amount),
+      parentBudgetId: budget.parentBudgetId,
+    },
+  });
+
+  return {
+    id,
+    deleted: true,
+  };
 }
 
 export async function getBudgetStatus(auth: AuthContext, id: string): Promise<BudgetAvailability & {

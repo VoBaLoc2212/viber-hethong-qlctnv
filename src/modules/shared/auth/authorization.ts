@@ -35,10 +35,10 @@ export async function requireAuth(request: NextRequest): Promise<AuthContext> {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, role: true, email: true },
+    select: { id: true, role: true, email: true, isActive: true },
   });
 
-  if (!user) {
+  if (!user || !user.isActive) {
     throw new AppError("Unauthorized", "UNAUTHORIZED");
   }
 

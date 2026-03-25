@@ -512,6 +512,53 @@ paths:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
 
+    delete:
+      operationId: deleteBudgetById
+      tags: [budgeting]
+      summary: Xóa ngân sách (finance admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "409":
+          description: Cannot delete budget with dependencies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /budgets/{id}/history:
+    get:
+      operationId: getBudgetHistory
+      tags: [budgeting]
+      summary: Lấy lịch sử thay đổi và transfer của ngân sách
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Budget history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
   /budgets/{id}/status:
     get:
       operationId: budgetStatus

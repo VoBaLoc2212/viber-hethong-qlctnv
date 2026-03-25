@@ -12,6 +12,7 @@ const CODE_TO_STATUS: Record<string, number> = {
   CONFLICT: 409,
   UNPROCESSABLE_ENTITY: 422,
   INVALID_INPUT: 400,
+  INTERNAL_SERVER_ERROR: 500,
 };
 
 export function handleApiError(request: NextRequest, unknownError: unknown) {

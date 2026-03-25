@@ -8,6 +8,7 @@ import {
   Receipt,
   PieChart,
   BarChart3,
+  Shield,
   Bot,
   Bell,
   Search,
@@ -22,6 +23,16 @@ import { useTheme } from "next-themes";
 
 import { useAuthSession } from "@/components/auth-session-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -32,6 +43,7 @@ const ICONS: Record<(typeof NAV_ITEMS)[number]["icon"], LucideIcon> = {
   transactions: Receipt,
   budgets: PieChart,
   reports: BarChart3,
+  security: Shield,
   assistant: Bot,
 };
 
@@ -40,6 +52,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const { resolvedTheme, setTheme } = useTheme();
   const { currentUser, logout, initializing } = useAuthSession();
   const [mounted, setMounted] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -52,12 +66,41 @@ export function AppLayout({ children }: { children: ReactNode }) {
     return NAV_ITEMS.filter((item) => item.roles.includes(currentUser.role));
   }, [currentUser]);
 
+  async function handleConfirmLogout() {
+    if (loggingOut || initializing) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+      setLogoutDialogOpen(false);
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
   if (isAuthPage) {
     return <>{children}</>;
   }
 
   return (
-    <div className="flex min-h-svh w-full bg-background">
+    <>
+      <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận đăng xuất</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn đăng xuất khỏi phiên làm việc hiện tại không?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loggingOut}>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void handleConfirmLogout()} disabled={loggingOut}>
+              {loggingOut ? "Đang đăng xuất..." : "Đăng xuất"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="flex min-h-svh w-full bg-background">
       <aside className="z-10 hidden w-64 flex-col border-r bg-card shadow-sm shadow-black/5 md:flex">
         <div className="flex h-16 items-center border-b border-border/50 px-6">
           <Link
@@ -188,10 +231,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <button
               type="button"
               className="flex items-center gap-3 rounded-full p-1.5 pr-3 transition-colors hover:bg-secondary/50"
-              onClick={() => {
-                void logout();
-              }}
-              disabled={initializing}
+              onClick={() => setLogoutDialogOpen(true)}
+              disabled={initializing || loggingOut}
             >
               <Avatar className="h-8 w-8 border border-border/50">
                 <AvatarImage src="" />
@@ -207,18 +248,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto bg-background p-4 md:p-8">
-          <motion.div
-            key={pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-            className="mx-auto h-full max-w-6xl"
-          >
-            {children}
-          </motion.div>
-        </div>
-      </main>
-    </div>
+          <div className="flex-1 overflow-auto bg-background p-4 md:p-8">
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="mx-auto h-full max-w-6xl"
+            >
+              {children}
+            </motion.div>
+          </div>
+        </main>
+      </div>
+    </>
   );
 }

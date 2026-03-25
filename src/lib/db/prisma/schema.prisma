@@ -354,6 +354,11 @@ model AuditLog {
   result        String   @default("SUCCESS")
   correlationId String?
   payload       Json?
+  payloadHash   String?
+  prevHash      String?
+  entryHash     String?
+  sourceType    String   @default("USER")
+  sourceId      String?
   createdAt     DateTime @default(now())
 
   actor User @relation(fields: [actorId], references: [id])
@@ -362,4 +367,15 @@ model AuditLog {
   @@index([actorId])
   @@index([createdAt])
   @@index([correlationId])
+  @@index([sourceType, sourceId])
+  @@unique([entryHash], map: "AuditLog_entryHash_key")
+}
+
+model InternalLogNonce {
+  nonce     String   @id
+  serviceId String
+  createdAt DateTime @default(now())
+
+  @@index([serviceId, createdAt])
+  @@index([createdAt])
 }

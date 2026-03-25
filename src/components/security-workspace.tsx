@@ -13,10 +13,22 @@ import {
 } from "@/lib/api";
 import type { AuditLogItem, AuthUser, LedgerEntryItem } from "@/lib/api";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 type SecurityWorkspaceProps = {
   token: string | null;
   currentUser: AuthUser | null;
 };
+
+type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 function generateIdempotencyKey(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -38,7 +50,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
     password: "",
     fullName: "",
     email: "",
-    role: "EMPLOYEE" as "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR",
+    role: "EMPLOYEE" as UserRole,
   });
 
   const [updateForm, setUpdateForm] = useState({
@@ -46,7 +58,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
     username: "",
     fullName: "",
     email: "",
-    role: "EMPLOYEE" as "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR",
+    role: "EMPLOYEE" as UserRole,
     isActive: true,
   });
 
@@ -235,373 +247,478 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
   }
 
   return (
-    <section className="panel">
-      <h2>Security & Logs</h2>
-      <p>
-        Current role: <strong>{currentUser?.role ?? "N/A"}</strong>
-      </p>
+    <section className="space-y-6">
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle>Security & Logs</CardTitle>
+          <CardDescription>Quản trị người dùng, audit logs và immutable ledger.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Current role:</span>
+            <Badge variant="outline">{currentUser?.role ?? "N/A"}</Badge>
+          </div>
 
-      {!token ? <p>Vui lòng đăng nhập để sử dụng module security.</p> : null}
+          {!token ? (
+            <Alert>
+              <AlertDescription>Vui lòng đăng nhập để sử dụng module security.</AlertDescription>
+            </Alert>
+          ) : null}
 
-      <div className="toolbar">
-        <button type="button" onClick={reloadAllData} disabled={!token || loading}>
-          {loading ? "Đang tải..." : "Tải dữ liệu security"}
-        </button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={reloadAllData} disabled={!token || loading}>
+              {loading ? "Đang tải..." : "Tải dữ liệu security"}
+            </Button>
+          </div>
+
+          {token && currentUser?.role !== "FINANCE_ADMIN" ? (
+            <Alert>
+              <AlertDescription>
+                Lưu ý: chỉ FINANCE_ADMIN có toàn quyền quản trị user; các thao tác khác phụ thuộc role.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Register User</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleRegisterUser}>
+              <div className="space-y-2">
+                <Label htmlFor="register-username">Username</Label>
+                <Input
+                  id="register-username"
+                  value={registerForm.username}
+                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, username: event.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="register-password">Password</Label>
+                <Input
+                  id="register-password"
+                  type="password"
+                  value={registerForm.password}
+                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="register-full-name">Full Name</Label>
+                <Input
+                  id="register-full-name"
+                  value={registerForm.fullName}
+                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, fullName: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="register-email">Email</Label>
+                <Input
+                  id="register-email"
+                  type="email"
+                  value={registerForm.email}
+                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="register-role">Role</Label>
+                <Select
+                  value={registerForm.role}
+                  onValueChange={(value) =>
+                    setRegisterForm((prev) => ({
+                      ...prev,
+                      role: value as UserRole,
+                    }))
+                  }
+                >
+                  <SelectTrigger id="register-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMPLOYEE">EMPLOYEE</SelectItem>
+                    <SelectItem value="MANAGER">MANAGER</SelectItem>
+                    <SelectItem value="ACCOUNTANT">ACCOUNTANT</SelectItem>
+                    <SelectItem value="FINANCE_ADMIN">FINANCE_ADMIN</SelectItem>
+                    <SelectItem value="AUDITOR">AUDITOR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button type="submit" disabled={!token || currentUser?.role !== "FINANCE_ADMIN"}>
+                Tạo user
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Update User</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleUpdateUser}>
+              <div className="space-y-2">
+                <Label htmlFor="update-id">User ID</Label>
+                <Input
+                  id="update-id"
+                  value={updateForm.id}
+                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, id: event.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="update-username">Username</Label>
+                <Input
+                  id="update-username"
+                  value={updateForm.username}
+                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, username: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="update-full-name">Full Name</Label>
+                <Input
+                  id="update-full-name"
+                  value={updateForm.fullName}
+                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, fullName: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="update-email">Email</Label>
+                <Input
+                  id="update-email"
+                  value={updateForm.email}
+                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, email: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="update-role">Role</Label>
+                <Select
+                  value={updateForm.role}
+                  onValueChange={(value) =>
+                    setUpdateForm((prev) => ({
+                      ...prev,
+                      role: value as UserRole,
+                    }))
+                  }
+                >
+                  <SelectTrigger id="update-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMPLOYEE">EMPLOYEE</SelectItem>
+                    <SelectItem value="MANAGER">MANAGER</SelectItem>
+                    <SelectItem value="ACCOUNTANT">ACCOUNTANT</SelectItem>
+                    <SelectItem value="FINANCE_ADMIN">FINANCE_ADMIN</SelectItem>
+                    <SelectItem value="AUDITOR">AUDITOR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="update-active"
+                  checked={updateForm.isActive}
+                  onCheckedChange={(checked) =>
+                    setUpdateForm((prev) => ({
+                      ...prev,
+                      isActive: checked === true,
+                    }))
+                  }
+                />
+                <Label htmlFor="update-active">Active</Label>
+              </div>
+
+              <Button
+                type="submit"
+                disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && updateForm.id !== currentUser?.id)}
+              >
+                Cập nhật user
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Delete User</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleDeleteUser}>
+              <div className="space-y-2">
+                <Label htmlFor="delete-user-id">User ID</Label>
+                <Input
+                  id="delete-user-id"
+                  value={deleteUserId}
+                  onChange={(event) => setDeleteUserId(event.target.value)}
+                  required
+                />
+              </div>
+
+              <Button type="submit" variant="destructive" disabled={!token || currentUser?.role !== "FINANCE_ADMIN"}>
+                Xóa user
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
-      {token && currentUser?.role !== "FINANCE_ADMIN" ? (
-        <p className="warning-text">
-          Lưu ý: chỉ FINANCE_ADMIN có toàn quyền quản trị user; các thao tác khác phụ thuộc role.
-        </p>
-      ) : null}
-
-      {error ? <p className="error-text">{error}</p> : null}
-
-      <div className="grid three-columns">
-        <form className="panel form-grid" onSubmit={handleRegisterUser}>
-          <h3>Register User</h3>
-          <label>
-            Username
-            <input
-              value={registerForm.username}
-              onChange={(event) => setRegisterForm((prev) => ({ ...prev, username: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={registerForm.password}
-              onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Full Name
-            <input
-              value={registerForm.fullName}
-              onChange={(event) => setRegisterForm((prev) => ({ ...prev, fullName: event.target.value }))}
-            />
-          </label>
-          <label>
-            Email
-            <input
-              type="email"
-              value={registerForm.email}
-              onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Role
-            <select
-              value={registerForm.role}
-              onChange={(event) =>
-                setRegisterForm((prev) => ({
-                  ...prev,
-                  role: event.target.value as
-                    | "EMPLOYEE"
-                    | "MANAGER"
-                    | "ACCOUNTANT"
-                    | "FINANCE_ADMIN"
-                    | "AUDITOR",
-                }))
-              }
-            >
-              <option value="EMPLOYEE">EMPLOYEE</option>
-              <option value="MANAGER">MANAGER</option>
-              <option value="ACCOUNTANT">ACCOUNTANT</option>
-              <option value="FINANCE_ADMIN">FINANCE_ADMIN</option>
-              <option value="AUDITOR">AUDITOR</option>
-            </select>
-          </label>
-          <button type="submit" disabled={!token || currentUser?.role !== "FINANCE_ADMIN"}>
-            Tạo user
-          </button>
-        </form>
-
-        <form className="panel form-grid" onSubmit={handleUpdateUser}>
-          <h3>Update User</h3>
-          <label>
-            User ID
-            <input
-              value={updateForm.id}
-              onChange={(event) => setUpdateForm((prev) => ({ ...prev, id: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Username
-            <input
-              value={updateForm.username}
-              onChange={(event) => setUpdateForm((prev) => ({ ...prev, username: event.target.value }))}
-            />
-          </label>
-          <label>
-            Full Name
-            <input
-              value={updateForm.fullName}
-              onChange={(event) => setUpdateForm((prev) => ({ ...prev, fullName: event.target.value }))}
-            />
-          </label>
-          <label>
-            Email
-            <input
-              value={updateForm.email}
-              onChange={(event) => setUpdateForm((prev) => ({ ...prev, email: event.target.value }))}
-            />
-          </label>
-          <label>
-            Role
-            <select
-              value={updateForm.role}
-              onChange={(event) =>
-                setUpdateForm((prev) => ({
-                  ...prev,
-                  role: event.target.value as
-                    | "EMPLOYEE"
-                    | "MANAGER"
-                    | "ACCOUNTANT"
-                    | "FINANCE_ADMIN"
-                    | "AUDITOR",
-                }))
-              }
-            >
-              <option value="EMPLOYEE">EMPLOYEE</option>
-              <option value="MANAGER">MANAGER</option>
-              <option value="ACCOUNTANT">ACCOUNTANT</option>
-              <option value="FINANCE_ADMIN">FINANCE_ADMIN</option>
-              <option value="AUDITOR">AUDITOR</option>
-            </select>
-          </label>
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={updateForm.isActive}
-              onChange={(event) => setUpdateForm((prev) => ({ ...prev, isActive: event.target.checked }))}
-            />
-            Active
-          </label>
-          <button
-            type="submit"
-            disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && updateForm.id !== currentUser?.id)}
-          >
-            Cập nhật user
-          </button>
-        </form>
-
-        <form className="panel form-grid" onSubmit={handleDeleteUser}>
-          <h3>Delete User</h3>
-          <label>
-            User ID
-            <input value={deleteUserId} onChange={(event) => setDeleteUserId(event.target.value)} required />
-          </label>
-          <button type="submit" disabled={!token || currentUser?.role !== "FINANCE_ADMIN"}>
-            Xóa user
-          </button>
-        </form>
-      </div>
-
-      <div className="panel">
-        <h3>Users</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Username</th>
-                <th>Full Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Active</th>
-              </tr>
-            </thead>
-            <tbody>
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader>
+          <CardTitle>Users</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Username</TableHead>
+                <TableHead>Full Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Active</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {users.map((user) => (
-                <tr key={user.id}>
-                  <td>{user.id}</td>
-                  <td>{user.username}</td>
-                  <td>{user.fullName}</td>
-                  <td>{user.email}</td>
-                  <td>{user.role}</td>
-                  <td>{String(user.isActive)}</td>
-                </tr>
+                <TableRow key={user.id}>
+                  <TableCell>{user.id}</TableCell>
+                  <TableCell>{user.username}</TableCell>
+                  <TableCell>{user.fullName}</TableCell>
+                  <TableCell>{user.email}</TableCell>
+                  <TableCell>{user.role}</TableCell>
+                  <TableCell>
+                    <Badge variant={user.isActive ? "secondary" : "outline"}>{String(user.isActive)}</Badge>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Audit Logs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleFilterLogs}>
+              <div className="space-y-2">
+                <Label htmlFor="log-entity-type">Entity Type</Label>
+                <Input
+                  id="log-entity-type"
+                  value={logFilter.entityType}
+                  onChange={(event) => setLogFilter((prev) => ({ ...prev, entityType: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="log-entity-id">Entity ID</Label>
+                <Input
+                  id="log-entity-id"
+                  value={logFilter.entityId}
+                  onChange={(event) => setLogFilter((prev) => ({ ...prev, entityId: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="log-user-id">User ID</Label>
+                <Input
+                  id="log-user-id"
+                  value={logFilter.userId}
+                  onChange={(event) => setLogFilter((prev) => ({ ...prev, userId: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="log-from-date">From Date (ISO)</Label>
+                <Input
+                  id="log-from-date"
+                  value={logFilter.fromDate}
+                  onChange={(event) => setLogFilter((prev) => ({ ...prev, fromDate: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="log-to-date">To Date (ISO)</Label>
+                <Input
+                  id="log-to-date"
+                  value={logFilter.toDate}
+                  onChange={(event) => setLogFilter((prev) => ({ ...prev, toDate: event.target.value }))}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && currentUser?.role !== "AUDITOR")}
+              >
+                Lọc logs
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Ledger Filter</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleFilterLedger}>
+              <div className="space-y-2">
+                <Label htmlFor="ledger-reference-type">Reference Type</Label>
+                <Input
+                  id="ledger-reference-type"
+                  value={ledgerFilter.referenceType}
+                  onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceType: event.target.value }))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ledger-reference-id">Reference ID</Label>
+                <Input
+                  id="ledger-reference-id"
+                  value={ledgerFilter.referenceId}
+                  onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceId: event.target.value }))}
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={
+                  !token ||
+                  (currentUser?.role !== "FINANCE_ADMIN" &&
+                    currentUser?.role !== "ACCOUNTANT" &&
+                    currentUser?.role !== "AUDITOR")
+                }
+              >
+                Lọc ledger
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
-      <div className="grid two-columns">
-        <form className="panel form-grid" onSubmit={handleFilterLogs}>
-          <h3>Audit Logs</h3>
-          <label>
-            Entity Type
-            <input
-              value={logFilter.entityType}
-              onChange={(event) => setLogFilter((prev) => ({ ...prev, entityType: event.target.value }))}
-            />
-          </label>
-          <label>
-            Entity ID
-            <input
-              value={logFilter.entityId}
-              onChange={(event) => setLogFilter((prev) => ({ ...prev, entityId: event.target.value }))}
-            />
-          </label>
-          <label>
-            User ID
-            <input
-              value={logFilter.userId}
-              onChange={(event) => setLogFilter((prev) => ({ ...prev, userId: event.target.value }))}
-            />
-          </label>
-          <label>
-            From Date (ISO)
-            <input
-              value={logFilter.fromDate}
-              onChange={(event) => setLogFilter((prev) => ({ ...prev, fromDate: event.target.value }))}
-            />
-          </label>
-          <label>
-            To Date (ISO)
-            <input
-              value={logFilter.toDate}
-              onChange={(event) => setLogFilter((prev) => ({ ...prev, toDate: event.target.value }))}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && currentUser?.role !== "AUDITOR")}
-          >
-            Lọc logs
-          </button>
-        </form>
-
-        <form className="panel form-grid" onSubmit={handleFilterLedger}>
-          <h3>Ledger Filter</h3>
-          <label>
-            Reference Type
-            <input
-              value={ledgerFilter.referenceType}
-              onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceType: event.target.value }))}
-            />
-          </label>
-          <label>
-            Reference ID
-            <input
-              value={ledgerFilter.referenceId}
-              onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceId: event.target.value }))}
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={
-              !token ||
-              (currentUser?.role !== "FINANCE_ADMIN" &&
-                currentUser?.role !== "ACCOUNTANT" &&
-                currentUser?.role !== "AUDITOR")
-            }
-          >
-            Lọc ledger
-          </button>
-        </form>
-      </div>
-
-      <div className="panel">
-        <h3>Audit Logs Result</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Action</th>
-                <th>Entity</th>
-                <th>Result</th>
-                <th>Actor</th>
-                <th>Correlation</th>
-              </tr>
-            </thead>
-            <tbody>
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader>
+          <CardTitle>Audit Logs Result</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Time</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Entity</TableHead>
+                <TableHead>Result</TableHead>
+                <TableHead>Actor</TableHead>
+                <TableHead>Correlation</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {logs.map((log) => (
-                <tr key={log.id}>
-                  <td>{log.createdAt}</td>
-                  <td>{log.action}</td>
-                  <td>
+                <TableRow key={log.id}>
+                  <TableCell>{log.createdAt}</TableCell>
+                  <TableCell>{log.action}</TableCell>
+                  <TableCell>
                     {log.entityType}:{log.entityId}
-                  </td>
-                  <td>{log.result}</td>
-                  <td>{log.actor.username}</td>
-                  <td>{log.correlationId ?? "-"}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{log.result}</TableCell>
+                  <TableCell>{log.actor.username}</TableCell>
+                  <TableCell>{log.correlationId ?? "-"}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-      <div className="panel">
-        <h3>Ledger (immutable) & Reversal</h3>
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader>
+          <CardTitle>Ledger (immutable) & Reversal</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateReversal}>
+            <div className="space-y-2">
+              <Label htmlFor="reversal-target-id">Target Ledger Entry ID</Label>
+              <Input
+                id="reversal-target-id"
+                value={ledgerFilter.reversalTargetId}
+                onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalTargetId: event.target.value }))}
+                required
+              />
+            </div>
 
-        <form className="form-grid" onSubmit={handleCreateReversal}>
-          <label>
-            Target Ledger Entry ID
-            <input
-              value={ledgerFilter.reversalTargetId}
-              onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalTargetId: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Reversal Reason
-            <input
-              value={ledgerFilter.reversalReason}
-              onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalReason: event.target.value }))}
-              required
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && currentUser?.role !== "ACCOUNTANT")}
-          >
-            Tạo reversal
-          </button>
-        </form>
+            <div className="space-y-2">
+              <Label htmlFor="reversal-reason">Reversal Reason</Label>
+              <Input
+                id="reversal-reason"
+                value={ledgerFilter.reversalReason}
+                onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalReason: event.target.value }))}
+                required
+              />
+            </div>
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Entry Code</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Reference</th>
-                <th>Reversal Of</th>
-                <th>Created By</th>
-                <th>Created At</th>
-              </tr>
-            </thead>
-            <tbody>
+            <div className="md:col-span-2">
+              <Button
+                type="submit"
+                disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && currentUser?.role !== "ACCOUNTANT")}
+              >
+                Tạo reversal
+              </Button>
+            </div>
+          </form>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Entry Code</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Reversal Of</TableHead>
+                <TableHead>Created By</TableHead>
+                <TableHead>Created At</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {ledgerEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td>{entry.entryCode}</td>
-                  <td>{entry.type}</td>
-                  <td>
+                <TableRow key={entry.id}>
+                  <TableCell>{entry.entryCode}</TableCell>
+                  <TableCell>{entry.type}</TableCell>
+                  <TableCell>
                     {entry.amount} {entry.currency}
-                  </td>
-                  <td>
+                  </TableCell>
+                  <TableCell>
                     {entry.referenceType}:{entry.referenceId}
-                  </td>
-                  <td>{entry.reversalOfEntryCode ?? entry.reversalOfId ?? "-"}</td>
-                  <td>{entry.createdBy.username}</td>
-                  <td>{entry.createdAt}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell>{entry.reversalOfEntryCode ?? entry.reversalOfId ?? "-"}</TableCell>
+                  <TableCell>{entry.createdBy.username}</TableCell>
+                  <TableCell>{entry.createdAt}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </section>
   );
 }

@@ -8,6 +8,10 @@ export type JwtPayload = {
 };
 
 export function requireJwtSecret(): string {
+  if (process.env.NODE_ENV !== "production") {
+    return "dev-secret-key-change-in-production";
+  }
+
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     throw new Error("JWT_SECRET is required");

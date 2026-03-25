@@ -17,11 +17,16 @@ function extractBearerToken(request: NextRequest): string {
   const authorization = request.headers.get("authorization") ?? "";
   const [scheme, token] = authorization.split(" ");
 
-  if (scheme !== "Bearer" || !token) {
-    throw new AppError("Unauthorized", "UNAUTHORIZED");
+  if (scheme === "Bearer" && token) {
+    return token;
   }
 
-  return token;
+  const cookieToken = request.cookies.get("budget-app-token")?.value;
+  if (cookieToken) {
+    return cookieToken;
+  }
+
+  throw new AppError("Unauthorized", "UNAUTHORIZED");
 }
 
 export async function requireAuth(request: NextRequest): Promise<AuthContext> {

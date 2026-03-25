@@ -12,6 +12,15 @@ import {
 } from "@/lib/api";
 import type { BudgetItem, BudgetStatus } from "@/lib/api";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
 const DEFAULT_WARNING = 80;
 
 type BudgetingWorkspaceProps = {
@@ -193,215 +202,292 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
   const isHardStop = selectedStatus?.hardStopEnabled && selectedStatus.available === "0.00";
 
   return (
-    <section className="panel">
-      <h2>Budgeting & Budget Control</h2>
+    <section className="space-y-6">
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle>Budgeting & Budget Control</CardTitle>
+          <CardDescription>Tạo, cập nhật, chuyển ngân sách và cấu hình hard-stop policy.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!token ? (
+            <Alert>
+              <AlertDescription>Vui lòng đăng nhập để thao tác ngân sách.</AlertDescription>
+            </Alert>
+          ) : null}
 
-      {!token ? <p>Vui lòng đăng nhập để thao tác ngân sách.</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={refreshBudgets} disabled={!token || loading}>
+              {loading ? "Đang tải..." : "Tải dữ liệu ngân sách"}
+            </Button>
+          </div>
 
-      <div className="toolbar">
-        <button type="button" onClick={refreshBudgets} disabled={!token || loading}>
-          {loading ? "Đang tải..." : "Tải dữ liệu ngân sách"}
-        </button>
+          {error ? (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Tạo ngân sách</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleCreateBudget}>
+              <div className="space-y-2">
+                <Label htmlFor="create-department-id">Department ID</Label>
+                <Input
+                  id="create-department-id"
+                  value={createForm.departmentId}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, departmentId: event.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="create-period">Kỳ ngân sách (period)</Label>
+                <Input
+                  id="create-period"
+                  value={createForm.period}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, period: event.target.value }))}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="create-amount">Amount</Label>
+                <Input
+                  id="create-amount"
+                  value={createForm.amount}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, amount: event.target.value }))}
+                  placeholder="100000000.00"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="create-parent-budget-id">Parent Budget ID (optional)</Label>
+                <Input
+                  id="create-parent-budget-id"
+                  value={createForm.parentBudgetId}
+                  onChange={(event) => setCreateForm((prev) => ({ ...prev, parentBudgetId: event.target.value }))}
+                />
+              </div>
+
+              <Button type="submit" disabled={!token}>
+                Tạo ngân sách
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Budget Control Policy</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleConfigurePolicy}>
+              <div className="space-y-2">
+                <Label htmlFor="policy-budget-id">Budget ID (trống = global)</Label>
+                <Input
+                  id="policy-budget-id"
+                  value={policyForm.budgetId}
+                  onChange={(event) => setPolicyForm((prev) => ({ ...prev, budgetId: event.target.value }))}
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Checkbox
+                  id="policy-enabled"
+                  checked={policyForm.enabled}
+                  onCheckedChange={(checked) =>
+                    setPolicyForm((prev) => ({
+                      ...prev,
+                      enabled: checked === true,
+                    }))
+                  }
+                />
+                <Label htmlFor="policy-enabled">Hard Stop Enabled</Label>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="policy-warning-threshold">Warning Threshold (%)</Label>
+                <Input
+                  id="policy-warning-threshold"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={policyForm.warningThresholdPct}
+                  onChange={(event) =>
+                    setPolicyForm((prev) => ({
+                      ...prev,
+                      warningThresholdPct: Number(event.target.value || DEFAULT_WARNING),
+                    }))
+                  }
+                />
+              </div>
+
+              <Button type="submit" disabled={!token}>
+                Lưu policy
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
-      {error ? <p className="error-text">{error}</p> : null}
-
-      <div className="grid two-columns">
-        <form className="panel form-grid" onSubmit={handleCreateBudget}>
-          <h3>Tạo ngân sách</h3>
-          <label>
-            Department ID
-            <input
-              value={createForm.departmentId}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, departmentId: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Kỳ ngân sách (period)
-            <input
-              value={createForm.period}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, period: event.target.value }))}
-              required
-            />
-          </label>
-          <label>
-            Amount
-            <input
-              value={createForm.amount}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, amount: event.target.value }))}
-              placeholder="100000000.00"
-              required
-            />
-          </label>
-          <label>
-            Parent Budget ID (optional)
-            <input
-              value={createForm.parentBudgetId}
-              onChange={(event) => setCreateForm((prev) => ({ ...prev, parentBudgetId: event.target.value }))}
-            />
-          </label>
-          <button type="submit" disabled={!token}>
-            Tạo ngân sách
-          </button>
-        </form>
-
-        <form className="panel form-grid" onSubmit={handleConfigurePolicy}>
-          <h3>Budget Control Policy</h3>
-          <label>
-            Budget ID (trống = global)
-            <input
-              value={policyForm.budgetId}
-              onChange={(event) => setPolicyForm((prev) => ({ ...prev, budgetId: event.target.value }))}
-            />
-          </label>
-
-          <label className="inline">
-            <input
-              type="checkbox"
-              checked={policyForm.enabled}
-              onChange={(event) => setPolicyForm((prev) => ({ ...prev, enabled: event.target.checked }))}
-            />
-            Hard Stop Enabled
-          </label>
-
-          <label>
-            Warning Threshold (%)
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={policyForm.warningThresholdPct}
-              onChange={(event) =>
-                setPolicyForm((prev) => ({
-                  ...prev,
-                  warningThresholdPct: Number(event.target.value || DEFAULT_WARNING),
-                }))
-              }
-            />
-          </label>
-
-          <button type="submit" disabled={!token}>
-            Lưu policy
-          </button>
-        </form>
-      </div>
-
-      <div className="panel">
-        <h3>Danh sách ngân sách</h3>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Department</th>
-                <th>Period</th>
-                <th>Amount</th>
-                <th>Reserved</th>
-                <th>Used</th>
-                <th>Available</th>
-                <th>Usage%</th>
-                <th>Warning</th>
-              </tr>
-            </thead>
-            <tbody>
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader>
+          <CardTitle>Danh sách ngân sách</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>ID</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Period</TableHead>
+                <TableHead>Amount</TableHead>
+                <TableHead>Reserved</TableHead>
+                <TableHead>Used</TableHead>
+                <TableHead>Available</TableHead>
+                <TableHead>Usage%</TableHead>
+                <TableHead>Warning</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {budgets.map((budget) => {
                 const status = statusByBudget[budget.id];
                 const isSelected = selectedBudgetId === budget.id;
 
                 return (
-                  <tr
+                  <TableRow
                     key={budget.id}
-                    className={isSelected ? "row-selected" : undefined}
+                    data-state={isSelected ? "selected" : undefined}
+                    className="cursor-pointer"
                     onClick={() => {
                       setSelectedBudgetId(budget.id);
                       setUpdateForm({ amount: budget.amount, parentBudgetId: budget.parentBudgetId ?? "" });
                     }}
                   >
-                    <td>{budget.id}</td>
-                    <td>{budget.departmentId}</td>
-                    <td>{budget.period}</td>
-                    <td>{budget.amount}</td>
-                    <td>{budget.reserved}</td>
-                    <td>{budget.used}</td>
-                    <td>{budget.available}</td>
-                    <td>{status ? `${status.percentageUsed}%` : "-"}</td>
-                    <td>{status?.warning ? "Cảnh báo" : "-"}</td>
-                  </tr>
+                    <TableCell>{budget.id}</TableCell>
+                    <TableCell>{budget.departmentId}</TableCell>
+                    <TableCell>{budget.period}</TableCell>
+                    <TableCell>{budget.amount}</TableCell>
+                    <TableCell>{budget.reserved}</TableCell>
+                    <TableCell>{budget.used}</TableCell>
+                    <TableCell>{budget.available}</TableCell>
+                    <TableCell>{status ? `${status.percentageUsed}%` : "-"}</TableCell>
+                    <TableCell>
+                      {status?.warning ? (
+                        <Badge variant="outline" className="border-yellow-500/50 text-yellow-700 dark:text-yellow-300">
+                          Cảnh báo
+                        </Badge>
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {selectedBudgetId ? (
-        <div className="grid two-columns">
-          <form className="panel form-grid" onSubmit={handleUpdateBudget}>
-            <h3>Cập nhật ngân sách: {selectedBudgetId}</h3>
-            <label>
-              Amount mới
-              <input
-                value={updateForm.amount}
-                onChange={(event) => setUpdateForm((prev) => ({ ...prev, amount: event.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Parent Budget ID
-              <input
-                value={updateForm.parentBudgetId}
-                onChange={(event) => setUpdateForm((prev) => ({ ...prev, parentBudgetId: event.target.value }))}
-              />
-            </label>
-            <button type="submit" disabled={!token}>
-              Cập nhật
-            </button>
-          </form>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader>
+              <CardTitle>Cập nhật ngân sách: {selectedBudgetId}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-4" onSubmit={handleUpdateBudget}>
+                <div className="space-y-2">
+                  <Label htmlFor="update-amount">Amount mới</Label>
+                  <Input
+                    id="update-amount"
+                    value={updateForm.amount}
+                    onChange={(event) => setUpdateForm((prev) => ({ ...prev, amount: event.target.value }))}
+                    required
+                  />
+                </div>
 
-          <form className="panel form-grid" onSubmit={handleTransferBudget}>
-            <h3>Chuyển ngân sách</h3>
-            <label>
-              To Budget ID
-              <input
-                value={transferForm.toBudgetId}
-                onChange={(event) => setTransferForm((prev) => ({ ...prev, toBudgetId: event.target.value }))}
-                required
-                disabled={!token || Boolean(isHardStop)}
-              />
-            </label>
-            <label>
-              Amount
-              <input
-                value={transferForm.amount}
-                onChange={(event) => setTransferForm((prev) => ({ ...prev, amount: event.target.value }))}
-                required
-                disabled={!token || Boolean(isHardStop)}
-              />
-            </label>
-            <label>
-              Reason
-              <input
-                value={transferForm.reason}
-                onChange={(event) => setTransferForm((prev) => ({ ...prev, reason: event.target.value }))}
-                disabled={!token || Boolean(isHardStop)}
-              />
-            </label>
+                <div className="space-y-2">
+                  <Label htmlFor="update-parent-budget-id">Parent Budget ID</Label>
+                  <Input
+                    id="update-parent-budget-id"
+                    value={updateForm.parentBudgetId}
+                    onChange={(event) => setUpdateForm((prev) => ({ ...prev, parentBudgetId: event.target.value }))}
+                  />
+                </div>
 
-            {selectedStatus?.warning ? (
-              <p className="warning-text">
-                Ngân sách đã sử dụng {selectedStatus.percentageUsed}% ({">="} {selectedStatus.warningThresholdPct}%).
-              </p>
-            ) : null}
+                <Button type="submit" disabled={!token}>
+                  Cập nhật
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
 
-            {isHardStop ? (
-              <p className="error-text">Hard Stop: available = 0.00, hệ thống khóa thao tác chi/chuyển ra.</p>
-            ) : null}
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader>
+              <CardTitle>Chuyển ngân sách</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="space-y-4" onSubmit={handleTransferBudget}>
+                <div className="space-y-2">
+                  <Label htmlFor="transfer-to-budget-id">To Budget ID</Label>
+                  <Input
+                    id="transfer-to-budget-id"
+                    value={transferForm.toBudgetId}
+                    onChange={(event) => setTransferForm((prev) => ({ ...prev, toBudgetId: event.target.value }))}
+                    required
+                    disabled={!token || Boolean(isHardStop)}
+                  />
+                </div>
 
-            <button type="submit" disabled={!token || Boolean(isHardStop)}>
-              Chuyển ngân sách
-            </button>
-          </form>
+                <div className="space-y-2">
+                  <Label htmlFor="transfer-amount">Amount</Label>
+                  <Input
+                    id="transfer-amount"
+                    value={transferForm.amount}
+                    onChange={(event) => setTransferForm((prev) => ({ ...prev, amount: event.target.value }))}
+                    required
+                    disabled={!token || Boolean(isHardStop)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="transfer-reason">Reason</Label>
+                  <Input
+                    id="transfer-reason"
+                    value={transferForm.reason}
+                    onChange={(event) => setTransferForm((prev) => ({ ...prev, reason: event.target.value }))}
+                    disabled={!token || Boolean(isHardStop)}
+                  />
+                </div>
+
+                {selectedStatus?.warning ? (
+                  <Alert>
+                    <AlertDescription>
+                      Ngân sách đã sử dụng {selectedStatus.percentageUsed}% ({">="} {selectedStatus.warningThresholdPct}%).
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+
+                {isHardStop ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>Hard Stop: available = 0.00, hệ thống khóa thao tác chi/chuyển ra.</AlertDescription>
+                  </Alert>
+                ) : null}
+
+                <Button type="submit" disabled={!token || Boolean(isHardStop)}>
+                  Chuyển ngân sách
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       ) : null}
     </section>

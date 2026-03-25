@@ -4,7 +4,7 @@ import { useState } from "react";
 import { PieChart, Plus, Building2, AlertTriangle } from "lucide-react";
 import { useGetDepartments, useCreateDepartment, useGetTransactions } from "@/lib/api-client";
 import { useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
@@ -22,6 +22,15 @@ const formSchema = z.object({
   code: z.string().min(2, "Code required").toUpperCase(),
   budgetAllocated: z.coerce.number().positive("Must be > 0"),
 });
+
+type FormInputValues = z.input<typeof formSchema>;
+type FormValues = z.output<typeof formSchema>;
+
+type CreateDepartmentInput = {
+  name: string;
+  code: string;
+  budgetAllocated: number;
+};
 
 export default function BudgetsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,13 +51,18 @@ export default function BudgetsPage() {
     },
   });
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormInputValues, unknown, FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: { name: "", code: "", budgetAllocated: 0 },
   });
 
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
-    createMutation.mutate({ data: values });
+  const onSubmit: SubmitHandler<FormValues> = (values) => {
+    const payload: CreateDepartmentInput = {
+      name: values.name,
+      code: values.code,
+      budgetAllocated: values.budgetAllocated,
+    };
+    createMutation.mutate({ data: payload });
   };
 
   const formatCurrency = (val: number) =>

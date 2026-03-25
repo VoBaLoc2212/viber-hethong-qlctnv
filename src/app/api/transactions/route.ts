@@ -1,73 +1,78 @@
-import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import type { TransactionStatus, TransactionType } from "@prisma/client";
 
-import {
-  getStore,
-  type Transaction,
-  type TransactionStatus,
-  type TransactionType,
-} from "../_store";
+import { createTransaction, listTransactions } from "@/modules/transaction";
+import { created, handleApiError, ok, readJsonBody, requireAuth, requireRole } from "@/modules/shared";
+import { getCorrelationId } from "@/modules/shared/http/request";
 
-function generateTransactionCode(): string {
-  const prefix = "TXN";
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `${prefix}-${timestamp}-${random}`;
+function normalizeAmount(amount: string | number | undefined): string | undefined {
+  if (typeof amount === "number") {
+    if (!Number.isFinite(amount)) return undefined;
+    return amount.toFixed(2);
+  }
+
+  if (typeof amount === "string") {
+    return amount.trim();
+  }
+
+  return undefined;
 }
 
-export async function GET(req: Request) {
-  const { transactions } = getStore();
-  const { searchParams } = new URL(req.url);
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireAuth(request);
+    requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
 
-  const page = Number(searchParams.get("page") ?? 1);
-  const limit = Number(searchParams.get("limit") ?? 20);
-  const type = (searchParams.get("type") as TransactionType | null) ?? null;
-  const status = (searchParams.get("status") as TransactionStatus | null) ?? null;
-  const departmentIdRaw = searchParams.get("departmentId");
-  const departmentId = departmentIdRaw ? Number(departmentIdRaw) : null;
+    const { searchParams } = new URL(request.url);
 
-  const filtered = transactions
-    .filter((t) => (type ? t.type === type : true))
-    .filter((t) => (status ? t.status === status : true))
-    .filter((t) => (departmentId != null ? t.departmentId === departmentId : true))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const result = await listTransactions(auth, {
+      page: Number(searchParams.get("page") ?? 1),
+      limit: Number(searchParams.get("limit") ?? 20),
+      type: (searchParams.get("type") as TransactionType | null) ?? undefined,
+      status: (searchParams.get("status") as TransactionStatus | null) ?? undefined,
+      departmentId: searchParams.get("departmentId") ?? undefined,
+      budgetId: searchParams.get("budgetId") ?? undefined,
+    });
 
-  const safePage = Number.isFinite(page) && page > 0 ? page : 1;
-  const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 20;
-  const offset = (safePage - 1) * safeLimit;
-  const data = filtered.slice(offset, offset + safeLimit);
-
-  return NextResponse.json({
-    data,
-    total: filtered.length,
-    page: safePage,
-    limit: safeLimit,
-  });
+    return ok({ data: result.data, total: result.meta.total, page: result.meta.page, limit: result.meta.limit }, {});
+  } catch (error) {
+    return handleApiError(request, error);
+  }
 }
 
-export async function POST(req: Request) {
-  const store = getStore();
-  const body = (await req.json()) as any;
+export async function POST(request: NextRequest) {
+  const correlationId = getCorrelationId(request);
 
-  const transactionCode = generateTransactionCode();
-  const dept = body.departmentId
-    ? store.departments.find((d) => d.id === Number(body.departmentId))
-    : undefined;
+  try {
+    const auth = await requireAuth(request);
+    requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
 
-  const tx: Transaction = {
-    id: store.nextTxId++,
-    transactionCode,
-    type: body.type,
-    amount: Number(body.amount ?? 0),
-    categoryId: body.categoryId != null ? Number(body.categoryId) : null,
-    departmentId: body.departmentId != null ? Number(body.departmentId) : null,
-    departmentName: dept?.name ?? null,
-    date: body.date ?? new Date().toISOString(),
-    description: body.description ?? null,
-    status: (body.status ?? "PENDING") as TransactionStatus,
-    createdAt: new Date().toISOString(),
-  };
+    const body = await readJsonBody<{
+      type?: TransactionType;
+      amount?: string | number;
+      budgetId?: string | null;
+      departmentId?: string | null;
+      date?: string;
+      description?: string | null;
+      status?: TransactionStatus;
+    }>(request);
 
-  store.transactions.unshift(tx);
-  return NextResponse.json(tx, { status: 201 });
+    const transaction = await createTransaction(
+      auth,
+      {
+        type: body.type,
+        amount: normalizeAmount(body.amount),
+        budgetId: body.budgetId ?? null,
+        departmentId: body.departmentId ?? null,
+        date: body.date,
+        description: body.description ?? null,
+        status: body.status,
+      },
+      correlationId,
+    );
+
+    return created(transaction, {});
+  } catch (error) {
+    return handleApiError(request, error);
+  }
 }
-

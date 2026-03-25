@@ -70,22 +70,23 @@ model Department {
 }
 
 model Budget {
-  id           String   @id @default(uuid())
-  departmentId String
-  period       String
-  amount       Decimal  @db.Decimal(18, 2)
-  reserved     Decimal  @default(0) @db.Decimal(18, 2)
-  used         Decimal  @default(0) @db.Decimal(18, 2)
+  id             String   @id @default(uuid())
+  departmentId   String
+  period         String
+  amount         Decimal  @db.Decimal(18, 2)
+  reserved       Decimal  @default(0) @db.Decimal(18, 2)
+  used           Decimal  @default(0) @db.Decimal(18, 2)
   parentBudgetId String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  department Department @relation(fields: [departmentId], references: [id])
-  parentBudget Budget?  @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id])
-  childBudgets Budget[] @relation("BudgetHierarchy")
-  outgoingTransfers BudgetTransfer[] @relation("TransferFromBudget")
-  incomingTransfers BudgetTransfer[] @relation("TransferToBudget")
-  policies BudgetControlPolicy[]
+  department        Department           @relation(fields: [departmentId], references: [id])
+  parentBudget      Budget?              @relation("BudgetHierarchy", fields: [parentBudgetId], references: [id])
+  childBudgets      Budget[]             @relation("BudgetHierarchy")
+  outgoingTransfers BudgetTransfer[]     @relation("TransferFromBudget")
+  incomingTransfers BudgetTransfer[]     @relation("TransferToBudget")
+  policies          BudgetControlPolicy[]
+  transactions      Transaction[]
 
   @@unique([departmentId, period])
   @@index([departmentId])
@@ -102,30 +103,42 @@ model Transaction {
   date        DateTime
   description String?
 
+  budgetId     String?
   departmentId String?
   createdById  String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  department Department? @relation(fields: [departmentId], references: [id])
-  createdBy  User        @relation(fields: [createdById], references: [id])
+  budget     Budget?      @relation(fields: [budgetId], references: [id])
+  department Department?  @relation(fields: [departmentId], references: [id])
+  createdBy  User         @relation(fields: [createdById], references: [id])
 
   approvals Approval[]
   postings  CashbookPosting[]
+
+  @@index([budgetId])
+  @@index([departmentId])
+  @@index([status])
+  @@index([date])
 }
 
 model Approval {
   id            String   @id @default(uuid())
   transactionId String
   approverId    String
+  step          Int      @default(1)
   status        String
   note          String?
   approvedAt    DateTime?
+  rejectedAt    DateTime?
   createdAt     DateTime @default(now())
 
   transaction Transaction @relation(fields: [transactionId], references: [id])
   approver    User        @relation("Approver", fields: [approverId], references: [id])
+
+  @@index([transactionId, step])
+  @@index([approverId, status])
 }
 
 model CashbookAccount {

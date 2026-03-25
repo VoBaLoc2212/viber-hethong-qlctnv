@@ -16,6 +16,12 @@ export async function apiLogin(payload: { username: string; password: string }) 
   });
 }
 
+export async function apiLogout() {
+  return apiRequest<{ success: boolean }>("/api/auth/logout", {
+    method: "POST",
+  });
+}
+
 export async function apiMe(token: string) {
   return apiRequest<AuthUser>("/api/auth/me", {
     token,

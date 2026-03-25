@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
-import { type AuthContext, requireRole, writeAuditLog } from "@/modules/shared";
+import { addMoney, calculateAvailable, compareMoney, type AuthContext, requireRole, writeAuditLog } from "@/modules/shared";
 import { AppError } from "@/modules/shared/errors/app-error";
 
 type LedgerFilter = {
@@ -131,6 +131,81 @@ export async function reverseLedgerEntry(
         },
       },
     });
+
+    if (target.referenceType === "TRANSACTION") {
+      const transaction = await tx.transaction.findUnique({ where: { id: target.referenceId } });
+      if (transaction) {
+        if (transaction.status !== "EXECUTED") {
+          throw new AppError("Only EXECUTED transaction can be reversed", "UNPROCESSABLE_ENTITY");
+        }
+
+        if (transaction.type === "EXPENSE") {
+          if (!transaction.budgetId) {
+            throw new AppError("Missing budget reference", "CONFLICT");
+          }
+
+          const budget = await tx.budget.findUnique({ where: { id: transaction.budgetId } });
+          if (!budget) {
+            throw new AppError("Budget not found", "NOT_FOUND");
+          }
+
+          const amount = decimalToString(budget.amount);
+          const reserved = decimalToString(budget.reserved);
+          const used = decimalToString(budget.used);
+          const txAmount = decimalToString(transaction.amount);
+
+          if (compareMoney(used, txAmount) < 0) {
+            throw new AppError("Budget used amount is inconsistent", "CONFLICT");
+          }
+
+          const nextUsed = addMoney(used, `-${txAmount}`);
+          const nextAvailable = calculateAvailable(amount, reserved, nextUsed);
+
+          await tx.budget.update({
+            where: { id: budget.id },
+            data: { used: nextUsed },
+          });
+
+          await tx.auditLog.create({
+            data: {
+              actorId: auth.userId,
+              action: "BUDGET_RELEASE",
+              entityType: "BUDGET",
+              entityId: budget.id,
+              correlationId,
+              payload: {
+                reason,
+                source: "LEDGER_REVERSAL",
+                transactionId: transaction.id,
+                amount: txAmount,
+                availableAfterRelease: nextAvailable,
+              },
+            },
+          });
+        }
+
+        await tx.transaction.update({
+          where: { id: transaction.id },
+          data: { status: "REVERSED" },
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorId: auth.userId,
+            action: "TRANSACTION_REVERSE",
+            entityType: "TRANSACTION",
+            entityId: transaction.id,
+            correlationId,
+            payload: {
+              targetEntryId: target.id,
+              reversalEntryId: created.id,
+              reason,
+              idempotencyKey,
+            },
+          },
+        });
+      }
+    }
 
     await tx.auditLog.create({
       data: {

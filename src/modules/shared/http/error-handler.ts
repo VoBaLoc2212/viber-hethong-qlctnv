@@ -37,7 +37,12 @@ export function handleApiError(request: NextRequest, unknownError: unknown) {
 
   return error(500, {
     code: "INTERNAL_SERVER_ERROR",
-    message: "Unexpected server error",
+    message:
+      process.env.NODE_ENV === "production"
+        ? "Unexpected server error"
+        : unknownError instanceof Error
+          ? unknownError.message
+          : "Unexpected server error",
     correlationId,
   });
 }

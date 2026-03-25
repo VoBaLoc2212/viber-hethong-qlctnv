@@ -7,6 +7,8 @@ import {
   type UseQueryOptions,
 } from "@tanstack/react-query";
 
+import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
+
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -54,34 +56,43 @@ export type ExpensesByMonthRow = {
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = typeof window !== "undefined" ? window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) : null;
   const res = await fetch(url, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
+    cache: "no-store",
   });
 
   if (!res.ok) {
     let message = `Request failed: ${res.status}`;
     try {
       const body = (await res.json()) as any;
-      message = body?.error ?? message;
+      message = body?.message ?? body?.error ?? message;
     } catch {
       // ignore
     }
     throw new Error(message);
   }
 
-  return (await res.json()) as T;
+  const payload = (await res.json()) as { data?: T } | T;
+  if (payload && typeof payload === "object" && "data" in (payload as any)) {
+    return (payload as { data: T }).data;
+  }
+
+  return payload as T;
 }
 
-export function useGetDepartments(
-  options?: UseQueryOptions<Department[]>,
-) {
+export function useGetDepartments(options?: UseQueryOptions<Department[]>) {
   return useQuery({
     queryKey: ["/api/departments"],
-    queryFn: () => fetchJson<Department[]>("/api/departments"),
+    queryFn: async () => {
+      const result = await fetchJson<{ departments: Department[] }>("/api/departments");
+      return result.departments;
+    },
     ...options,
   });
 }
@@ -90,11 +101,7 @@ export function useCreateDepartment(opts?: {
   mutation?: UseMutationOptions<Department, Error, { data: Omit<Department, "id"> }>;
 }) {
   return useMutation({
-    mutationFn: ({ data }) =>
-      fetchJson<Department>("/api/departments", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
+    mutationFn: ({ data }) => fetchJson<Department>("/api/departments", { method: "POST", body: JSON.stringify(data) }),
     ...(opts?.mutation ?? {}),
   });
 }
@@ -170,7 +177,10 @@ export function useGetDashboardKpis(options?: UseQueryOptions<DashboardKpis>) {
 export function useGetExpensesByMonth(options?: UseQueryOptions<ExpensesByMonthRow[]>) {
   return useQuery({
     queryKey: ["/api/dashboard/expenses-by-month"],
-    queryFn: () => fetchJson<ExpensesByMonthRow[]>("/api/dashboard/expenses-by-month"),
+    queryFn: async () => {
+      const result = await fetchJson<{ rows: ExpensesByMonthRow[] }>("/api/dashboard/expenses-by-month");
+      return result.rows;
+    },
     ...options,
   });
 }

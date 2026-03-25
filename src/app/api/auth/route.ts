@@ -5,7 +5,7 @@ export async function GET() {
     {
       data: {
         module: "auth",
-        endpoints: ["POST /api/auth/login", "POST /api/auth/register", "GET /api/auth/me"],
+        endpoints: ["POST /api/auth/login", "POST /api/auth/logout", "POST /api/auth/register", "GET /api/auth/me"],
       },
       meta: {},
     },

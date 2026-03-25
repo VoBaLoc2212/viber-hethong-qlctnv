@@ -2,14 +2,19 @@
 
 import { useMemo, useState } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { apiLogin } from "@/lib/api";
 import type { AuthUser } from "@/lib/api";
 
 type AuthPanelProps = {
   token: string | null;
   currentUser: AuthUser | null;
-  onAuthenticated: (payload: { token: string; user: AuthUser }) => void;
-  onLogout: () => void;
+  onAuthenticated: (payload: { token: string; user: AuthUser }) => Promise<void> | void;
+  onLogout: () => Promise<void> | void;
 };
 
 export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: AuthPanelProps) {
@@ -27,7 +32,7 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
 
     try {
       const result = await apiLogin({ username, password });
-      onAuthenticated({ token: result.token, user: result.user });
+      await onAuthenticated({ token: result.token, user: result.user });
       setPassword("");
     } catch (unknownError) {
       const message =
@@ -42,42 +47,67 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
 
   if (isLoggedIn && currentUser) {
     return (
-      <section className="panel">
-        <h2>Đăng nhập</h2>
-        <p>
-          Đang đăng nhập: <strong>{currentUser.fullName}</strong> ({currentUser.role})
-        </p>
-        <button type="button" onClick={onLogout}>
-          Đăng xuất
-        </button>
-      </section>
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader>
+          <CardTitle>Đăng nhập</CardTitle>
+          <CardDescription>
+            Đang đăng nhập: <strong>{currentUser.fullName}</strong> ({currentUser.role})
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void onLogout();
+            }}
+          >
+            Đăng xuất
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <section className="panel">
-      <h2>Đăng nhập</h2>
-      <form onSubmit={handleLogin} className="form-grid">
-        <label>
-          Username
-          <input value={username} onChange={(event) => setUsername(event.target.value)} required />
-        </label>
+    <Card className="border-border/50 shadow-sm">
+      <CardHeader>
+        <CardTitle>Đăng nhập</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="auth-username">Username</Label>
+            <Input
+              id="auth-username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+            />
+          </div>
 
-        <label>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
+          <div className="space-y-2">
+            <Label htmlFor="auth-password">Password</Label>
+            <Input
+              id="auth-password"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+          </div>
 
-        <button type="submit" disabled={loading}>
-          {loading ? "Đang đăng nhập..." : "Đăng nhập"}
-        </button>
-      </form>
-      {error ? <p className="error-text">{error}</p> : null}
-    </section>
+          <Button type="submit" disabled={loading}>
+            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+          </Button>
+        </form>
+
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }

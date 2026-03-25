@@ -1,24 +1,41 @@
-import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-import { getStore, type TransactionStatus } from "../../_store";
+import { changeTransactionStatus, getTransactionById } from "@/modules/transaction";
+import { handleApiError, ok, readJsonBody, requireAuth, requireRole } from "@/modules/shared";
+import { getCorrelationId } from "@/modules/shared/http/request";
 
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
-  const store = getStore();
-  const tx = store.transactions.find((t) => t.id === Number(id));
-  if (!tx) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-  return NextResponse.json(tx);
+type Params = { params: Promise<{ id: string }> };
+
+export async function GET(request: NextRequest, ctx: Params) {
+  try {
+    const auth = await requireAuth(request);
+    requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
+
+    const { id } = await ctx.params;
+    const tx = await getTransactionById(auth, id);
+    return ok(tx, {});
+  } catch (unknownError) {
+    return handleApiError(request, unknownError);
+  }
 }
 
-export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
-  const store = getStore();
-  const tx = store.transactions.find((t) => t.id === Number(id));
-  if (!tx) return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+export async function PATCH(request: NextRequest, ctx: Params) {
+  const correlationId = getCorrelationId(request);
 
-  const body = (await req.json()) as any;
-  if (body.status) {
-    tx.status = body.status as TransactionStatus;
+  try {
+    const auth = await requireAuth(request);
+    requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
+
+    const { id } = await ctx.params;
+    const body = await readJsonBody<{
+      action?: "manager_approve" | "accountant_approve" | "reject" | "execute";
+      note?: string;
+      reason?: string;
+    }>(request);
+
+    const tx = await changeTransactionStatus(auth, id, body, correlationId);
+    return ok(tx, {});
+  } catch (unknownError) {
+    return handleApiError(request, unknownError);
   }
-  return NextResponse.json(tx);
 }

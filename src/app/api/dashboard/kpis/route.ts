@@ -1,25 +1,51 @@
-import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-import { getStore } from "../../_store";
+import { prisma } from "@/lib/db/prisma/client";
+import { handleApiError, requireAuth, requireRole } from "@/modules/shared";
+import { ok } from "@/modules/shared/http/response";
 
-export async function GET() {
-  const store = getStore();
-  const totalBudget = store.departments.reduce((sum, d) => sum + Number(d.budgetAllocated ?? 0), 0);
-  const totalSpent = store.transactions
-    .filter((t) => t.type === "EXPENSE" && t.status !== "REJECTED")
-    .reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
-  const totalIncome = store.transactions
-    .filter((t) => t.type === "INCOME" && t.status !== "REJECTED")
-    .reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
-  const transactionCount = store.transactions.length;
-  const pendingCount = store.transactions.filter((t) => t.status === "PENDING").length;
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireAuth(request);
+    requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
 
-  return NextResponse.json({
-    totalBudget,
-    totalSpent,
-    remainingBalance: totalBudget - totalSpent,
-    totalIncome,
-    transactionCount,
-    pendingCount,
-  });
+    const [departmentAgg, txAgg, pendingCount, transactionCount] = await Promise.all([
+      prisma.department.aggregate({
+        _sum: { budgetAllocated: true },
+      }),
+      prisma.transaction.groupBy({
+        by: ["type"],
+        where: {
+          status: {
+            notIn: ["REJECTED", "REVERSED"],
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+      prisma.transaction.count({
+        where: { status: "PENDING" },
+      }),
+      prisma.transaction.count(),
+    ]);
+
+    const totalBudget = Number((departmentAgg._sum.budgetAllocated ?? 0).toString());
+    const totalSpent = Number((txAgg.find((row) => row.type === "EXPENSE")?._sum.amount ?? 0).toString());
+    const totalIncome = Number((txAgg.find((row) => row.type === "INCOME")?._sum.amount ?? 0).toString());
+
+    return ok(
+      {
+        totalBudget,
+        totalSpent,
+        remainingBalance: totalBudget - totalSpent,
+        totalIncome,
+        transactionCount,
+        pendingCount,
+      },
+      {},
+    );
+  } catch (error) {
+    return handleApiError(request, error);
+  }
 }

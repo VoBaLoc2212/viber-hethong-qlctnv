@@ -66,14 +66,18 @@ export async function login(payload: LoginPayload, jwtSecret: string, correlatio
     getJwtExpiresIn(),
   );
 
-  await writeAuditLog({
-    actorId: user.id,
-    action: "AUTH_LOGIN",
-    entityType: "USER",
-    entityId: user.id,
-    correlationId,
-    result: "SUCCESS",
-  });
+  try {
+    await writeAuditLog({
+      actorId: user.id,
+      action: "AUTH_LOGIN",
+      entityType: "USER",
+      entityId: user.id,
+      correlationId,
+      result: "SUCCESS",
+    });
+  } catch (error) {
+    void error;
+  }
 
   return {
     token,

@@ -48,7 +48,7 @@ export default function DashboardPage() {
               Cash Flow (Last 6 Months)
             </CardTitle>
           </CardHeader>
-          <CardContent className="px-2 sm:px-6 h-[350px]">
+          <CardContent className="h-[260px] px-2 sm:h-[350px] sm:px-6">
             {isLoadingChart ? (
               <Skeleton className="w-full h-full rounded-xl" />
             ) : monthlyData && monthlyData.length > 0 ? (

@@ -12,7 +12,7 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl items-center px-4 py-10">
+    <main className="mx-auto flex min-h-svh w-full max-w-xl items-center px-4 py-10">
       <div className="w-full space-y-6">
         <Card className="border-border/50 shadow-sm">
           <CardHeader>

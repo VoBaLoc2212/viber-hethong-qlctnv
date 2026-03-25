@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 
 export default function AiAssistantPage() {
   return (
-    <div className="h-[calc(100vh-8rem)] flex flex-col">
+    <div className="flex min-h-[calc(100svh-8rem)] flex-col">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:gap-3 sm:text-3xl">
           AI Assistant <Sparkles className="w-6 h-6 text-primary" />
         </h1>
         <p className="text-muted-foreground mt-1">Ask questions about your finances, generate insights, or find anomalies.</p>

@@ -190,7 +190,7 @@ export default function BudgetsPage() {
       </div>
 
       {departments?.length === 0 && !isLoading && (
-        <div className="p-12 text-center border-2 border-dashed border-border/50 rounded-2xl">
+        <div className="p-6 sm:p-12 text-center border-2 border-dashed border-border/50 rounded-2xl">
           <PieChart className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-foreground mb-1">No departments defined</h3>
           <p className="text-muted-foreground mb-4">Create your first department to start tracking budgets.</p>

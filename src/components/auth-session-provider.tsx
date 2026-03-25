@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { apiLogout, apiMe } from "@/lib/api";
 import type { AuthUser } from "@/lib/api";
@@ -55,10 +55,13 @@ function resolvePostLoginPath(nextPath: string | null, role: UserRole): string {
   return getFirstAccessiblePath(role);
 }
 
+function getNextPathFromUrl() {
+  return new URLSearchParams(window.location.search).get("next");
+}
+
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   const [token, setToken] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
@@ -100,13 +103,13 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     if (initializing || !currentUser) return;
 
     if (pathname === "/") {
-      const target = resolvePostLoginPath(searchParams.get("next"), currentUser.role);
+      const target = resolvePostLoginPath(getNextPathFromUrl(), currentUser.role);
       navigateAfterAuth(target);
       return;
     }
 
     if (pathname === "/auth") {
-      const target = resolvePostLoginPath(searchParams.get("next"), currentUser.role);
+      const target = resolvePostLoginPath(getNextPathFromUrl(), currentUser.role);
       navigateAfterAuth(target);
       return;
     }
@@ -114,7 +117,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     if (!isRouteAllowed(pathname, currentUser.role)) {
       router.replace(getFirstAccessiblePath(currentUser.role));
     }
-  }, [currentUser, initializing, navigateAfterAuth, pathname, router, searchParams]);
+  }, [currentUser, initializing, navigateAfterAuth, pathname, router]);
 
   const onAuthenticated = useCallback(
     async ({ token: nextToken, user }: { token: string; user: AuthUser }) => {
@@ -123,10 +126,10 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       setToken(nextToken);
       setCurrentUser(user);
 
-      const target = resolvePostLoginPath(searchParams.get("next"), user.role);
+      const target = resolvePostLoginPath(getNextPathFromUrl(), user.role);
       navigateAfterAuth(target);
     },
-    [navigateAfterAuth, searchParams],
+    [navigateAfterAuth],
   );
 
   const logout = useCallback(async () => {

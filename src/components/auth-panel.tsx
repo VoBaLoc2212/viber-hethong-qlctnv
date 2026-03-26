@@ -49,8 +49,8 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
 
   if (isLoggedIn && currentUser) {
     return (
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader>
+      <Card className="border-border/50 shadow-sm lg:shadow-md">
+        <CardHeader className="space-y-2">
           <CardTitle>Đăng nhập</CardTitle>
           <CardDescription>
             Đang đăng nhập: <strong>{currentUser.fullName}</strong> ({currentUser.role})
@@ -72,20 +72,20 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
   }
 
   return (
-    <Card className="border-border/60 shadow-sm">
-      <CardHeader className="space-y-1">
+    <Card className="border-border/60 shadow-sm lg:shadow-md">
+      <CardHeader className="space-y-2">
         <CardTitle>Truy cập hệ thống</CardTitle>
         <CardDescription>Xác thực để làm việc theo đúng quyền và quy trình nghiệp vụ.</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-1">
         <Tabs defaultValue="login" className="w-full">
-          <TabsList className="grid h-10 w-full grid-cols-2">
+          <TabsList className="grid h-11 w-full grid-cols-2">
             <TabsTrigger value="login">Đăng nhập</TabsTrigger>
             <TabsTrigger value="register">Đăng ký</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="login" className="mt-4">
-            <form onSubmit={handleLogin} className="space-y-4">
+          <TabsContent value="login" className="mt-5">
+            <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="auth-username">Username</Label>
                 <Input
@@ -119,24 +119,24 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
             ) : null}
           </TabsContent>
 
-          <TabsContent value="register" className="mt-4 space-y-4">
-            <div className="rounded-lg border border-border/50 bg-secondary/30 p-4">
+          <TabsContent value="register" className="mt-5 space-y-4">
+            <div className="rounded-lg border border-border/50 bg-secondary/30 p-5">
               <div className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
                 <UserPlus className="h-4 w-4 text-primary" />
               </div>
               <p className="text-sm font-semibold">Đăng ký tài khoản doanh nghiệp</p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 Hệ thống này không mở tự đăng ký công khai. Tài khoản được FINANCE_ADMIN cấp phát để đảm bảo kiểm soát
                 quyền truy cập và tuân thủ nghiệp vụ tài chính.
               </p>
             </div>
 
-            <div className="rounded-lg border border-border/50 p-4">
+            <div className="rounded-lg border border-border/50 p-5">
               <div className="mb-2 flex items-center gap-2 text-sm font-medium">
                 <ShieldCheck className="h-4 w-4 text-primary" />
                 Quy trình đề nghị cấp tài khoản
               </div>
-              <ol className="list-inside list-decimal space-y-1 text-sm text-muted-foreground">
+              <ol className="list-inside list-decimal space-y-2 text-sm text-muted-foreground">
                 <li>Gửi yêu cầu tới FINANCE_ADMIN hoặc bộ phận IT nội bộ.</li>
                 <li>Cung cấp họ tên, email công ty và phòng ban công tác.</li>
                 <li>Sau khi được cấp quyền, đăng nhập bằng tài khoản đã nhận.</li>

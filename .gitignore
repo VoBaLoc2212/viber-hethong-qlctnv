@@ -58,3 +58,4 @@ src/public/uploads/transactions/*
 out
 .env
 .env
+.env.production

@@ -13,17 +13,42 @@ import {
   Search,
   Wallet,
   Sun,
-  Moon
+  Moon,
+  CheckCircle2,
+  Undo2,
+  ChevronDown,
+  LogOut,
+  Check,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetCurrentUser,
+  useLogout,
+  useGetNotifications,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+  useGetApprovals,
+} from "@/lib/api-client";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: Receipt },
+  { href: "/approvals", label: "Quy trình Duyệt chi (Approval)", icon: CheckCircle2 },
+  { href: "/reimbursement", label: "Hoàn ứng (Reimbursement)", icon: Undo2 },
   { href: "/budgets", label: "Budgets", icon: PieChart },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/ai-assistant", label: "AI Assistant", icon: Bot },
@@ -33,6 +58,55 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { data: currentUser } = useGetCurrentUser();
+  const { data: notificationsResp } = useGetNotifications();
+
+  const logout = useLogout({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        window.location.reload();
+      },
+    },
+  });
+
+  const markRead = useMarkNotificationRead({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+    },
+  });
+
+  const markAllRead = useMarkAllNotificationsRead({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+    },
+  });
+
+  // Pending approval count for sidebar badge
+  const { data: pendingApprovals } = useGetApprovals(
+    currentUser?.role === "MANAGER"
+      ? { tab: "approve" }
+      : currentUser?.role === "ACCOUNTANT"
+        ? { tab: "execute" }
+        : {},
+  );
+  const pendingApprovalCount = (pendingApprovals ?? []).filter(
+    (a) => (currentUser?.role === "MANAGER" && a.status === "PENDING") || (currentUser?.role === "ACCOUNTANT" && a.status === "APPROVED"),
+  ).length;
+
+  const unreadCount = notificationsResp?.unreadCount ?? 0;
+  const notifications = notificationsResp?.data ?? [];
+
+  const initials = currentUser
+    ? currentUser.fullName
+        .split(" ")
+        .map((w) => w[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "??";
 
   useEffect(() => {
     setMounted(true);
@@ -57,6 +131,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
           {navItems.map((item) => {
             const isActive = pathname === item.href;
+            const showBadge = item.href === "/approvals" && pendingApprovalCount > 0;
             return (
               <Link key={item.href} href={item.href}>
                 <div className={`
@@ -67,7 +142,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   }
                 `}>
                   <item.icon className={`w-5 h-5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
-                  {item.label}
+                  <span className="flex-1 truncate">{item.label}</span>
+                  {showBadge && (
+                    <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 ${
+                      isActive
+                        ? 'bg-primary-foreground/20 text-primary-foreground'
+                        : 'bg-destructive text-destructive-foreground'
+                    }`}>
+                      {pendingApprovalCount}
+                    </span>
+                  )}
                 </div>
               </Link>
             );
@@ -98,10 +182,74 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </div>
           
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="rounded-full relative">
-              <Bell className="w-5 h-5 text-muted-foreground" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full border border-card" />
-            </Button>
+            {/* ─── Notification bell ─── */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full relative">
+                  <Bell className="w-5 h-5 text-muted-foreground" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 border-2 border-card">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[360px] p-0">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <h4 className="font-semibold text-sm">Thông báo</h4>
+                  {unreadCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => markAllRead.mutate()}
+                    >
+                      <Check className="w-3 h-3 mr-1" /> Đánh dấu tất cả đã đọc
+                    </Button>
+                  )}
+                </div>
+                <ScrollArea className="max-h-80">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      Không có thông báo
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/50">
+                      {notifications.slice(0, 20).map((n) => (
+                        <div
+                          key={n.id}
+                          className={`px-4 py-3 cursor-pointer hover:bg-secondary/50 transition-colors ${
+                            !n.isRead ? "bg-primary/5" : ""
+                          }`}
+                          onClick={() => !n.isRead && markRead.mutate({ id: n.id })}
+                        >
+                          <div className="flex items-start gap-2">
+                            {!n.isRead && (
+                              <span className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm leading-snug ${
+                                !n.isRead ? "font-medium" : "text-muted-foreground"
+                              }`}>
+                                {n.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                {n.message}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground/60 mt-1">
+                                {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: vi })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
+
             <Button
               variant="ghost"
               size="icon"
@@ -119,16 +267,51 @@ export function AppLayout({ children }: { children: ReactNode }) {
               )}
             </Button>
             <div className="h-6 w-px bg-border mx-1" />
-            <div className="flex items-center gap-3 cursor-pointer hover:bg-secondary/50 p-1.5 pr-3 rounded-full transition-colors">
-              <Avatar className="w-8 h-8 border border-border/50">
-                <AvatarImage src="" />
-                <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">JD</AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:block text-left">
-                <p className="text-sm font-medium leading-none">Jane Doe</p>
-                <p className="text-xs text-muted-foreground">Admin</p>
-              </div>
-            </div>
+
+            {/* ─── User Menu ─── */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <div className="flex items-center gap-2 cursor-pointer hover:bg-secondary/50 p-1.5 pr-3 rounded-full transition-colors">
+                  <Avatar className="w-8 h-8 border border-border/50">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "..."}</p>
+                    <p className="text-xs text-muted-foreground">{currentUser?.role ?? ""}</p>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 p-2">
+                <div className="px-2 py-3 border-b border-border/50">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-10 h-10">
+                      <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                        {initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">{currentUser?.fullName}</p>
+                      <p className="text-sm text-muted-foreground truncate">{currentUser?.email}</p>
+                      <Badge variant="outline" className="text-xs mt-1">{currentUser?.role}</Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="py-1">
+                  <button
+                    className="w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-secondary/70"
+                    onClick={() => logout.mutate()}
+                    disabled={logout.isPending}
+                  >
+                    <LogOut className="w-4 h-4 text-muted-foreground" />
+                    <span>{logout.isPending ? "Đang đăng xuất..." : "Đăng xuất"}</span>
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </header>
 

@@ -15,6 +15,15 @@ enum UserRole {
   AUDITOR
 }
 
+enum ApprovalRequestStatus {
+  NOT_YET
+  PENDING
+  APPROVED
+  NOT_APPROVED
+  EXECUTE
+  NOT_EXECUTE
+}
+
 enum TransactionType {
   INCOME
   EXPENSE
@@ -88,9 +97,8 @@ model Department {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  budgets               Budget[]
-  transactions          Transaction[]
-  recurringTransactions RecurringTransaction[]
+  budgets      Budget[]
+  transactions Transaction[]
 }
 
 model Budget {
@@ -378,4 +386,51 @@ model InternalLogNonce {
 
   @@index([serviceId, createdAt])
   @@index([createdAt])
+}
+
+model ApprovalRequest {
+  id              String               @id @default(uuid())
+  requestCode     String               @unique
+  title           String
+  description     String?
+  amount          Decimal              @db.Decimal(18, 2)
+
+  departmentId    String?
+  requesterId     String
+  approverId      String?
+  accountantId    String?
+
+  status          ApprovalRequestStatus @default(NOT_YET)
+
+  rejectionReason   String?
+  notExecuteReason  String?
+  executedAmount    Decimal?           @db.Decimal(18, 2)
+
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  executedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  department  Department?  @relation(fields: [departmentId], references: [id])
+  requester   User         @relation("Requester", fields: [requesterId], references: [id])
+  approver    User?        @relation("ApprovalApprover", fields: [approverId], references: [id])
+  accountant  User?        @relation("ApprovalAccountant", fields: [accountantId], references: [id])
+}
+
+model Notification {
+  id            String   @id @default(uuid())
+  recipientId   String
+  type          String
+  title         String
+  message       String
+  referenceType String?
+  referenceId   String?
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id])
+
+  @@index([recipientId, isRead])
 }

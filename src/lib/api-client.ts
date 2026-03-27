@@ -11,6 +11,8 @@ import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
 
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ApprovalRequestStatus = "NOT_YET" | "PENDING" | "APPROVED" | "NOT_APPROVED" | "EXECUTE" | "NOT_EXECUTE";
+export type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 export type Department = {
   id: number;
@@ -31,6 +33,56 @@ export type Transaction = {
   description: string | null;
   status: TransactionStatus;
   createdAt: string;
+};
+
+export type AppUser = {
+  id: number;
+  fullName: string;
+  email: string;
+  role: UserRole;
+};
+
+export type ApprovalRequest = {
+  id: number;
+  requestCode: string;
+  title: string;
+  description: string | null;
+  amount: number;
+  departmentId: number | null;
+  departmentName: string | null;
+  requesterId: number;
+  requesterName: string;
+  approverId: number | null;
+  approverName: string | null;
+  accountantId: number | null;
+  accountantName: string | null;
+  status: ApprovalRequestStatus;
+  rejectionReason: string | null;
+  notExecuteReason: string | null;
+  executedAmount: number | null;
+  submittedAt: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  executedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotificationItem = {
+  id: number;
+  recipientId: number;
+  type: string;
+  title: string;
+  message: string;
+  referenceType: string | null;
+  referenceId: number | null;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export type NotificationsResponse = {
+  data: NotificationItem[];
+  unreadCount: number;
 };
 
 export type Paginated<T> = {
@@ -181,6 +233,203 @@ export function useGetExpensesByMonth(options?: UseQueryOptions<ExpensesByMonthR
       const result = await fetchJson<{ rows: ExpensesByMonthRow[] }>("/api/dashboard/expenses-by-month");
       return result.rows;
     },
+    ...options,
+  });
+}
+
+// ─── Auth / User ───
+
+export function useGetCurrentUser(options?: UseQueryOptions<AppUser>) {
+  return useQuery({
+    queryKey: ["/api/auth"],
+    queryFn: () => fetchJson<AppUser>("/api/auth"),
+    ...options,
+  });
+}
+
+export function useSwitchUser(opts?: {
+  mutation?: UseMutationOptions<AppUser, Error, { userId: number }>;
+}) {
+  return useMutation({
+    mutationFn: ({ userId }) =>
+      fetchJson<AppUser>("/api/auth", {
+        method: "PUT",
+        body: JSON.stringify({ userId }),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useLogout(opts?: {
+  mutation?: UseMutationOptions<{ success: boolean }, Error, void>;
+}) {
+  return useMutation({
+    mutationFn: () =>
+      fetchJson<{ success: boolean }>("/api/auth/logout", {
+        method: "POST",
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useGetUsers(role?: UserRole, options?: UseQueryOptions<AppUser[]>) {
+  const url = role ? `/api/auth/users?role=${role}` : "/api/auth/users";
+  return useQuery({
+    queryKey: ["/api/auth/users", role],
+    queryFn: () => fetchJson<AppUser[]>(url),
+    ...options,
+  });
+}
+
+// ─── Approvals ───
+
+export function useGetApprovals(
+  params: { tab?: string; status?: ApprovalRequestStatus } = {},
+  options?: UseQueryOptions<ApprovalRequest[]>,
+) {
+  const search = new URLSearchParams();
+  if (params.tab) search.set("tab", params.tab);
+  if (params.status) search.set("status", params.status);
+  const url = `/api/approvals${search.toString() ? `?${search.toString()}` : ""}`;
+
+  return useQuery({
+    queryKey: ["/api/approvals", params],
+    queryFn: () => fetchJson<ApprovalRequest[]>(url),
+    ...options,
+  });
+}
+
+export function useCreateApproval(opts?: {
+  mutation?: UseMutationOptions<
+    ApprovalRequest,
+    Error,
+    { data: { title: string; description?: string; amount: number; departmentId?: number } }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ data }) =>
+      fetchJson<ApprovalRequest>("/api/approvals", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useUpdateApproval(opts?: {
+  mutation?: UseMutationOptions<
+    ApprovalRequest,
+    Error,
+    { id: number; data: { title?: string; description?: string; amount?: number; departmentId?: number } }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      fetchJson<ApprovalRequest>(`/api/approvals/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useDeleteApproval(opts?: {
+  mutation?: UseMutationOptions<{ success: boolean }, Error, { id: number }>;
+}) {
+  return useMutation({
+    mutationFn: ({ id }) =>
+      fetchJson<{ success: boolean }>(`/api/approvals/${id}`, {
+        method: "DELETE",
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useApprovalAction(opts?: {
+  mutation?: UseMutationOptions<
+    ApprovalRequest,
+    Error,
+    {
+      id: number;
+      data: {
+        action: "submit" | "approve" | "reject" | "execute" | "not-execute";
+        accountantId?: number;
+        rejectionReason?: string;
+        notExecuteReason?: string;
+        executedAmount?: number;
+      };
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      fetchJson<ApprovalRequest>(`/api/approvals/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+// ─── Notifications ───
+
+export function useGetNotifications(options?: UseQueryOptions<NotificationsResponse>) {
+  return useQuery({
+    queryKey: ["/api/notifications"],
+    queryFn: () => fetchJson<NotificationsResponse>("/api/notifications"),
+    refetchInterval: 10000,
+    ...options,
+  });
+}
+
+export function useMarkNotificationRead(opts?: {
+  mutation?: UseMutationOptions<NotificationItem, Error, { id: number }>;
+}) {
+  return useMutation({
+    mutationFn: ({ id }) =>
+      fetchJson<NotificationItem>(`/api/notifications/${id}`, {
+        method: "PATCH",
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useMarkAllNotificationsRead(opts?: {
+  mutation?: UseMutationOptions<{ success: boolean }, Error, void>;
+}) {
+  return useMutation({
+    mutationFn: () =>
+      fetchJson<{ success: boolean }>("/api/notifications/read-all", {
+        method: "PATCH",
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+// ─── Budgets ───
+
+export type BudgetAvailable = {
+  departmentId: number;
+  period: string;
+  amount: number;
+  reserved: number;
+  used: number;
+  available: number;
+};
+
+export function useBudgetAvailable(
+  params: { departmentId?: number; period?: string },
+  options?: UseQueryOptions<BudgetAvailable>,
+) {
+  const search = new URLSearchParams();
+  if (params.departmentId != null) search.set("departmentId", String(params.departmentId));
+  if (params.period) search.set("period", params.period);
+  const url = `/api/budgets/available?${search.toString()}`;
+
+  return useQuery({
+    queryKey: ["/api/budgets/available", params],
+    queryFn: () => fetchJson<BudgetAvailable>(url),
+    enabled: !!params.departmentId,
     ...options,
   });
 }

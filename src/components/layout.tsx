@@ -15,8 +15,11 @@ import {
   Wallet,
   Sun,
   Moon,
-  Menu,
-  type LucideIcon,
+  CheckCircle2,
+  Undo2,
+  ChevronDown,
+  LogOut,
+  Check,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
@@ -35,17 +38,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { NAV_ITEMS } from "@/lib/auth/rbac";
+import { motion } from "framer-motion";
+import { useTheme } from "next-themes";
 
-const ICONS: Record<(typeof NAV_ITEMS)[number]["icon"], LucideIcon> = {
-  dashboard: LayoutDashboard,
-  transactions: Receipt,
-  budgets: PieChart,
-  reports: BarChart3,
-  security: Shield,
-  assistant: Bot,
-};
+const navItems = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/transactions", label: "Transactions", icon: Receipt },
+  { href: "/budgets", label: "Budgets", icon: PieChart },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/ai-assistant", label: "AI Assistant", icon: Bot },
+];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -54,6 +56,55 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const queryClient = useQueryClient();
+  const { data: currentUser } = useGetCurrentUser();
+  const { data: notificationsResp } = useGetNotifications();
+
+  const logout = useLogout({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries();
+        window.location.reload();
+      },
+    },
+  });
+
+  const markRead = useMarkNotificationRead({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+    },
+  });
+
+  const markAllRead = useMarkAllNotificationsRead({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
+    },
+  });
+
+  // Pending approval count for sidebar badge
+  const { data: pendingApprovals } = useGetApprovals(
+    currentUser?.role === "MANAGER"
+      ? { tab: "approve" }
+      : currentUser?.role === "ACCOUNTANT"
+        ? { tab: "execute" }
+        : {},
+  );
+  const pendingApprovalCount = (pendingApprovals ?? []).filter(
+    (a) => (currentUser?.role === "MANAGER" && a.status === "PENDING") || (currentUser?.role === "ACCOUNTANT" && a.status === "APPROVED"),
+  ).length;
+
+  const unreadCount = notificationsResp?.unreadCount ?? 0;
+  const notifications = notificationsResp?.data ?? [];
+
+  const initials = currentUser
+    ? currentUser.fullName
+        .split(" ")
+        .map((w) => w[0])
+        .slice(0, 2)
+        .join("")
+        .toUpperCase()
+    : "??";
 
   useEffect(() => {
     setMounted(true);
@@ -119,6 +170,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           {visibleNavItems.map((item) => {
             const Icon = ICONS[item.icon];
             const isActive = pathname === item.href;
+            const showBadge = item.href === "/approvals" && pendingApprovalCount > 0;
             return (
               <Link key={item.href} href={item.href}>
                 <div
@@ -129,9 +181,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   }
-                `}
-                >
-                  <Icon className={`h-5 w-5 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
+                `}>
+                  <item.icon className={`w-5 h-5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                   {item.label}
                 </div>
               </Link>
@@ -205,11 +256,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
               />
             </div>
           </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
-            <Button variant="ghost" size="icon" className="relative rounded-full">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-card bg-destructive" />
+          
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" className="rounded-full relative">
+              <Bell className="w-5 h-5 text-muted-foreground" />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full border border-card" />
             </Button>
             <Button
               variant="ghost"
@@ -227,24 +278,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <Moon className="h-5 w-5 text-muted-foreground" />
               )}
             </Button>
-            <div className="mx-0.5 hidden h-6 w-px bg-border sm:block" />
-            <button
-              type="button"
-              className="flex items-center gap-3 rounded-full p-1.5 pr-3 transition-colors hover:bg-secondary/50"
-              onClick={() => setLogoutDialogOpen(true)}
-              disabled={initializing || loggingOut}
-            >
-              <Avatar className="h-8 w-8 border border-border/50">
+            <div className="h-6 w-px bg-border mx-1" />
+            <div className="flex items-center gap-3 cursor-pointer hover:bg-secondary/50 p-1.5 pr-3 rounded-full transition-colors">
+              <Avatar className="w-8 h-8 border border-border/50">
                 <AvatarImage src="" />
-                <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
-                  {currentUser?.fullName?.slice(0, 2).toUpperCase() ?? "NA"}
-                </AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">JD</AvatarFallback>
               </Avatar>
-              <div className="hidden text-left sm:block">
-                <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "N/A"}</p>
-                <p className="text-xs text-muted-foreground">{currentUser?.role ?? "N/A"}</p>
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-medium leading-none">Jane Doe</p>
+                <p className="text-xs text-muted-foreground">Admin</p>
               </div>
-            </button>
+            </div>
           </div>
         </header>
 

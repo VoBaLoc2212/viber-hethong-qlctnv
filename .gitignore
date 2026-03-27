@@ -53,3 +53,4 @@ Thumbs.db
 **/.next
 out
 .env
+.env.production

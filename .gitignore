@@ -57,3 +57,4 @@ src/public/uploads/transactions/*
 **/.next
 out
 .env
+.env

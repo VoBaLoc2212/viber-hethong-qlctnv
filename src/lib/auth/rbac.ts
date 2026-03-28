@@ -106,6 +106,7 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/favicon")) return true;
   if (pathname.startsWith("/api/auth")) return true;
   if (pathname === "/api" || pathname.startsWith("/api/openapi")) return true;
+  if (pathname.startsWith("/api/ai")) return true;
   return false;
 }
 

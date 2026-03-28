@@ -10,7 +10,17 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get(AUTH_TOKEN_COOKIE_KEY)?.value;
+  // Check for token in cookies (browser requests)
+  let token = request.cookies.get(AUTH_TOKEN_COOKIE_KEY)?.value;
+
+  // Also check for Authorization header (server-side API calls)
+  if (!token) {
+    const authHeader = request.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    }
+  }
+
   if (!token) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth";

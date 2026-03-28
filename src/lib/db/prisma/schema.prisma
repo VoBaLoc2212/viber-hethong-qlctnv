@@ -57,6 +57,23 @@ enum LedgerEntryType {
   REVERSAL
 }
 
+enum AIQuestionIntent {
+  SUMMARIZE
+  COMPARE
+  FORECAST
+  ANOMALY_DETECT
+  CLARIFY
+  TREND_ANALYSIS
+}
+
+enum AICitationSourceType {
+  REPORT
+  LEDGER
+  TRANSACTION
+  BUDGET
+  CONTROL_LOG
+}
+
 model User {
   id           String   @id @default(uuid())
   username     String   @unique
@@ -76,6 +93,7 @@ model User {
   ledgerEntries LedgerEntry[]
   budgetTransfers BudgetTransfer[]
   auditLogs    AuditLog[]
+  aiConversations AIConversation[]
 
   @@index([role])
 }
@@ -377,5 +395,62 @@ model InternalLogNonce {
   createdAt DateTime @default(now())
 
   @@index([serviceId, createdAt])
+  @@index([createdAt])
+}
+
+// AI RAG Module
+model AIConversation {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User         @relation(fields: [userId], references: [id])
+  messages AIMessage[]
+
+  @@index([userId, createdAt])
+}
+
+model AIMessage {
+  id             String   @id @default(uuid())
+  conversationId String
+  role           String   @db.VarChar(20) // "user" | "assistant"
+  question       String?
+  answer         String?
+  tableData      Json?
+  citations      Json?   // Array<{source, reference}>
+  
+  // Metadata
+  processingTimeMs Int?
+  llmModel         String? @db.VarChar(50)
+  tokensUsed       Int?
+  costEstimate     Decimal? @db.Decimal(10, 6)
+  confidenceScore  Decimal? @db.Decimal(3, 2) // 0.00 - 1.00
+  
+  // Data sources hit
+  dataSourcesHit   String[] // Array of API endpoints called
+  
+  createdAt DateTime @default(now())
+
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([role])
+}
+
+// Vector Embeddings (optional - can use external Pinecone later)
+model AIVectorEmbedding {
+  id        String   @id @default(uuid())
+  sourceType String  @db.VarChar(50) // "question" | "rule" | "pattern"
+  sourceId  String?
+  content   String
+  embedding Float[] // Vector stored as array of floats
+  
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([sourceType])
   @@index([createdAt])
 }

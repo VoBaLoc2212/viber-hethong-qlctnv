@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { AIService } from "@/modules/ai";
-import type { ChatRequest } from "@/modules/ai/types";
+import { AIService, type ChatRequest } from "@/modules/ai";
 import { prisma } from "@/lib/db/prisma/client";
 import type { UserRole } from "@prisma/client";
 
@@ -35,7 +34,7 @@ const AIErrorCodes = {
   DATA_RETRIEVAL_FAILED: "DATA_RETRIEVAL_FAILED",
   LLM_ERROR: "LLM_ERROR",
   INTERNAL_ERROR: "INTERNAL_ERROR",
-} as const;
+};
 
 interface AIError {
   code: string;
@@ -60,13 +59,17 @@ function extractUserFromHeaders(
   }
 
   try {
+    // For development: parse simple format
+    // In production: use JWT library (e.g., jsonwebtoken)
     const token = authHeader.substring(7);
 
+    // Validate token is not empty
     if (!token || token.trim() === "") {
       return null;
     }
 
-    // TODO: decode JWT thật ở đây
+    // TODO: Properly decode JWT
+    // For now, return mock data - replace with actual JWT parsing
     return {
       userId: "user-123",
       role: "FINANCE_ADMIN" as UserRole,
@@ -85,8 +88,8 @@ export async function POST(request: NextRequest) {
   const correlationId = randomUUID();
 
   try {
+    // Parse request body
     let body: ChatRequest;
-
     try {
       const json = await request.json();
       body = ChatRequestSchema.parse(json);
@@ -100,6 +103,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Extract user from auth header
     const authHeader = request.headers.get("authorization");
     const userInfo = extractUserFromHeaders(authHeader);
 
@@ -113,9 +117,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Initialize AI Service
     const aiService = new AIService("http://localhost:3001");
+
+    // Extract auth token (remove "Bearer " prefix)
     const authToken = authHeader?.substring(7);
 
+    // Call AI Service (handles all orchestration internally)
     const response = await aiService.chat(
       body,
       userInfo.userId,
@@ -124,9 +132,11 @@ export async function POST(request: NextRequest) {
       authToken
     );
 
+    // Store in database (optional - ConversationManager already stores in-memory)
     try {
       const aiResponse = response.data;
 
+      // Store conversation
       await (prisma as any).aIConversation.upsert({
         where: {
           id: aiResponse.conversation_id,
@@ -143,6 +153,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Store message
       await (prisma as any).aIMessage.create({
         data: {
           id: aiResponse.id,
@@ -161,6 +172,7 @@ export async function POST(request: NextRequest) {
       });
     } catch (error) {
       console.error("[AI Chat] Failed to store message in database:", error);
+      // Continue anyway - don't fail the response
     }
 
     return NextResponse.json(response, { status: 200 });

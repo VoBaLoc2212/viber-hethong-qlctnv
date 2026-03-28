@@ -8,18 +8,22 @@ import {
   Receipt,
   PieChart,
   BarChart3,
-  Shield,
   Bot,
   Bell,
   Search,
   Wallet,
   Sun,
   Moon,
+  CheckCircle2,
+  Undo2,
+  Check,
   Menu,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
 
 import { useAuthSession } from "@/components/auth-session-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -35,17 +39,33 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { NAV_ITEMS } from "@/lib/auth/rbac";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  useGetNotifications,
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+  useGetApprovals,
+} from "@/lib/api-client";
 
-const ICONS: Record<(typeof NAV_ITEMS)[number]["icon"], LucideIcon> = {
-  dashboard: LayoutDashboard,
-  transactions: Receipt,
-  budgets: PieChart,
-  reports: BarChart3,
-  security: Shield,
-  assistant: Bot,
-};
+const navItems: { href: string; label: string; icon: LucideIcon }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/transactions", label: "Transactions", icon: Receipt },
+  { href: "/approvals", label: "Quy trình Duyệt chi (Approval)", icon: CheckCircle2 },
+  { href: "/reimbursement", label: "Hoàn ứng (Reimbursement)", icon: Undo2 },
+  { href: "/budgets", label: "Budgets", icon: PieChart },
+  { href: "/reports", label: "Reports", icon: BarChart3 },
+  { href: "/ai-assistant", label: "AI Assistant", icon: Bot },
+];
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -55,6 +75,15 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const notificationsQuery = useGetNotifications({ enabled: !!currentUser });
+  const notifications = notificationsQuery.data?.data ?? [];
+  const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+
+  const approvalsQuery = useGetApprovals({ status: "PENDING" }, { enabled: !!currentUser });
+  const pendingApprovalCount = approvalsQuery.data?.length ?? 0;
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -63,7 +92,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const visibleNavItems = useMemo(() => {
     if (!currentUser) return [];
-    return NAV_ITEMS.filter((item) => item.roles.includes(currentUser.role));
+    return navItems;
   }, [currentUser]);
 
   async function handleConfirmLogout() {
@@ -117,8 +146,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
         <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-6">
           <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Menu</div>
           {visibleNavItems.map((item) => {
-            const Icon = ICONS[item.icon];
+            const Icon = item.icon;
             const isActive = pathname === item.href;
+            const showBadge = item.href === "/approvals" && pendingApprovalCount > 0;
             return (
               <Link key={item.href} href={item.href}>
                 <div
@@ -129,10 +159,18 @@ export function AppLayout({ children }: { children: ReactNode }) {
                       ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
                       : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                   }
-                `}
-                >
-                  <Icon className={`h-5 w-5 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
-                  {item.label}
+                `}>
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                  <span className="flex-1 truncate">{item.label}</span>
+                  {showBadge && (
+                    <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 ${
+                      isActive
+                        ? 'bg-primary-foreground/20 text-primary-foreground'
+                        : 'bg-destructive text-destructive-foreground'
+                    }`}>
+                      {pendingApprovalCount}
+                    </span>
+                  )}
                 </div>
               </Link>
             );
@@ -174,7 +212,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <nav className="space-y-1.5 px-3 py-6">
                   <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Menu</div>
                   {visibleNavItems.map((item) => {
-                    const Icon = ICONS[item.icon];
+                    const Icon = item.icon;
                     const isActive = pathname === item.href;
                     return (
                       <Link key={item.href} href={item.href}>
@@ -205,12 +243,76 @@ export function AppLayout({ children }: { children: ReactNode }) {
               />
             </div>
           </div>
+          
+          <div className="flex items-center gap-3">
+            {/* ─── Notification bell ─── */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full relative">
+                  <Bell className="w-5 h-5 text-muted-foreground" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold px-1 border-2 border-card">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[360px] p-0">
+                <div className="flex items-center justify-between px-4 py-3 border-b">
+                  <h4 className="font-semibold text-sm">Thông báo</h4>
+                  {unreadCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => markAllRead.mutate()}
+                    >
+                      <Check className="w-3 h-3 mr-1" /> Đánh dấu tất cả đã đọc
+                    </Button>
+                  )}
+                </div>
+                <ScrollArea className="max-h-80">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-muted-foreground">
+                      <Bell className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      Không có thông báo
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border/50">
+                      {notifications.slice(0, 20).map((n) => (
+                        <div
+                          key={n.id}
+                          className={`px-4 py-3 cursor-pointer hover:bg-secondary/50 transition-colors ${
+                            !n.isRead ? "bg-primary/5" : ""
+                          }`}
+                          onClick={() => !n.isRead && markRead.mutate({ id: n.id })}
+                        >
+                          <div className="flex items-start gap-2">
+                            {!n.isRead && (
+                              <span className="w-2 h-2 rounded-full bg-primary mt-1.5 shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-sm leading-snug ${
+                                !n.isRead ? "font-medium" : "text-muted-foreground"
+                              }`}>
+                                {n.title}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                {n.message}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground/60 mt-1">
+                                {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true, locale: vi })}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+              </PopoverContent>
+            </Popover>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
-            <Button variant="ghost" size="icon" className="relative rounded-full">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-card bg-destructive" />
-            </Button>
             <Button
               variant="ghost"
               size="icon"

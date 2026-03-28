@@ -15,6 +15,15 @@ enum UserRole {
   AUDITOR
 }
 
+enum ApprovalRequestStatus {
+  NOT_YET
+  PENDING
+  APPROVED
+  NOT_APPROVED
+  EXECUTE
+  NOT_EXECUTE
+}
+
 enum TransactionType {
   INCOME
   EXPENSE
@@ -68,16 +77,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  transactions Transaction[]
-  approvals    Approval[]        @relation("Approver")
-  uploadedAttachments TransactionAttachment[] @relation("AttachmentUploader")
-  recurringTransactions RecurringTransaction[] @relation("RecurringCreator")
-  reconciledLedgerEntries LedgerEntry[] @relation("LedgerReconciler")
-  ledgerEntries LedgerEntry[]
-  budgetTransfers BudgetTransfer[]
-  auditLogs    AuditLog[]
-
-  @@index([role])
+  transactions       Transaction[]
+  approvals          Approval[]          @relation("Approver")
+  approvalRequests   ApprovalRequest[]   @relation("Requester")
+  approvedRequests   ApprovalRequest[]   @relation("ApprovalApprover")
+  accountantRequests ApprovalRequest[]   @relation("ApprovalAccountant")
+  notifications      Notification[]      @relation("NotificationRecipient")
+  ledgerEntries      LedgerEntry[]
 }
 
 model Department {
@@ -88,9 +94,9 @@ model Department {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  budgets               Budget[]
-  transactions          Transaction[]
-  recurringTransactions RecurringTransaction[]
+  budgets           Budget[]
+  transactions      Transaction[]
+  approvalRequests  ApprovalRequest[]
 }
 
 model Budget {
@@ -346,36 +352,58 @@ model BudgetControlPolicy {
 }
 
 model AuditLog {
-  id            String   @id @default(uuid())
-  actorId       String
-  action        String
-  entityType    String
-  entityId      String
-  result        String   @default("SUCCESS")
-  correlationId String?
-  payload       Json?
-  payloadHash   String?
-  prevHash      String?
-  entryHash     String?
-  sourceType    String   @default("USER")
-  sourceId      String?
-  createdAt     DateTime @default(now())
-
-  actor User @relation(fields: [actorId], references: [id])
-
-  @@index([entityType, entityId])
-  @@index([actorId])
-  @@index([createdAt])
-  @@index([correlationId])
-  @@index([sourceType, sourceId])
-  @@unique([entryHash], map: "AuditLog_entryHash_key")
+  id         String   @id @default(uuid())
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime @default(now())
 }
 
-model InternalLogNonce {
-  nonce     String   @id
-  serviceId String
-  createdAt DateTime @default(now())
+model ApprovalRequest {
+  id              String               @id @default(uuid())
+  requestCode     String               @unique
+  title           String
+  description     String?
+  amount          Decimal              @db.Decimal(18, 2)
 
-  @@index([serviceId, createdAt])
-  @@index([createdAt])
+  departmentId    String?
+  requesterId     String
+  approverId      String?
+  accountantId    String?
+
+  status          ApprovalRequestStatus @default(NOT_YET)
+
+  rejectionReason   String?
+  notExecuteReason  String?
+  executedAmount    Decimal?           @db.Decimal(18, 2)
+
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  executedAt      DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  department  Department?  @relation(fields: [departmentId], references: [id])
+  requester   User         @relation("Requester", fields: [requesterId], references: [id])
+  approver    User?        @relation("ApprovalApprover", fields: [approverId], references: [id])
+  accountant  User?        @relation("ApprovalAccountant", fields: [accountantId], references: [id])
+}
+
+model Notification {
+  id            String   @id @default(uuid())
+  recipientId   String
+  type          String
+  title         String
+  message       String
+  referenceType String?
+  referenceId   String?
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id])
+
+  @@index([recipientId, isRead])
 }

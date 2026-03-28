@@ -26,6 +26,22 @@ export type BudgetItem = {
   parentBudgetId?: string | null;
 };
 
+export type TransactionReferenceDepartment = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type TransactionReferenceBudget = {
+  id: string;
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
+  period: string;
+  amount: string;
+  available: string;
+};
+
 export type BudgetStatus = {
   budgetId: string;
   amount: string;
@@ -105,4 +121,67 @@ export type LedgerEntryItem = {
     email: string;
     role: UserRole;
   } | null;
+};
+
+export type TransactionItem = {
+  id: string;
+  transactionCode: string;
+  type: "INCOME" | "EXPENSE";
+  status: "DRAFT" | "PENDING" | "APPROVED" | "EXECUTED" | "REJECTED" | "REVERSED";
+  amount: string;
+  currency: string;
+  date: string;
+  description?: string | null;
+  budgetId?: string | null;
+  departmentId?: string | null;
+  recurringSourceId?: string | null;
+  createdAt: string;
+};
+
+export type UploadedTransactionAttachment = {
+  fileName: string;
+  fileUrl: string;
+  fileSize: number;
+  mimeType: string | null;
+};
+
+export type RecurringTemplateItem = {
+  id: string;
+  name: string;
+  type: "INCOME" | "EXPENSE";
+  amount: string;
+  frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "ANNUALLY";
+  nextRunAt: string;
+  lastRunAt: string | null;
+  active: boolean;
+  budgetId?: string | null;
+  departmentId?: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CashbookAccountItem = {
+  id: string;
+  name: string;
+  type: string;
+  balance: string;
+  updatedAt: string;
+};
+
+export type CashbookPostingItem = {
+  id: string;
+  accountId: string;
+  transactionId: string;
+  direction: "IN" | "OUT";
+  amount: string;
+  postedAt: string;
+  transaction: {
+    id: string;
+    code: string;
+    type: "INCOME" | "EXPENSE";
+    status: "DRAFT" | "PENDING" | "APPROVED" | "EXECUTED" | "REJECTED" | "REVERSED";
+    description?: string | null;
+    date: string;
+  };
 };

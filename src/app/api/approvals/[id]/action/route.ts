@@ -10,6 +10,7 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
   const correlationId = getCorrelationId(request);
+  const idempotencyKey = request.headers.get("idempotency-key");
 
   try {
     const auth = await requireAuth(request);
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         approvalId: id,
       },
       correlationId,
+      idempotencyKey,
     );
 
     return ok(transaction, {});

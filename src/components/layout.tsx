@@ -70,8 +70,8 @@ import {
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: Receipt },
-  { href: "/approvals", label: "Quy trình Duyệt chi (Approval)", icon: CheckCircle2 },
-  { href: "/reimbursement", label: "Hoàn ứng (Reimbursement)", icon: Undo2 },
+  { href: "/approvals", label: "Quy trình Duyệt chi", icon: CheckCircle2 },
+  { href: "/reimbursement", label: "Hoàn ứng", icon: Undo2 },
   { href: "/budgets", label: "Budgets", icon: PieChart },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/ai-assistant", label: "AI Assistant", icon: Bot },

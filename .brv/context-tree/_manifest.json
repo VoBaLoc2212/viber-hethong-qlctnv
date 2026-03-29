@@ -1,0 +1,109 @@
+{
+  "active_context": [
+    {
+      "order": 3,
+      "path": "_index.md",
+      "tokens": 1298,
+      "type": "summary"
+    },
+    {
+      "order": 2,
+      "path": "domains/_index.md",
+      "tokens": 670,
+      "type": "summary"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/context.md",
+      "tokens": 139,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/system_overview/context.md",
+      "tokens": 102,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/system_overview/documentation_corpus_inventory.md",
+      "tokens": 495,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/system_overview/source_root_path.md",
+      "tokens": 309,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "architecture/system_overview/viber_financial_platform_overview.md",
+      "tokens": 689,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "domains/context.md",
+      "tokens": 115,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "domains/core_modules/context.md",
+      "tokens": 68,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "domains/core_modules/core_module_responsibilities.md",
+      "tokens": 598,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "operations/context.md",
+      "tokens": 115,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "operations/deployment_and_environment/context.md",
+      "tokens": 64,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "operations/deployment_and_environment/runtime_and_delivery.md",
+      "tokens": 527,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "quality/context.md",
+      "tokens": 90,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "quality/known_issues/context.md",
+      "tokens": 58,
+      "type": "context"
+    },
+    {
+      "importance": 50,
+      "path": "quality/known_issues/current_gaps_and_risks.md",
+      "tokens": 538,
+      "type": "context"
+    }
+  ],
+  "generated_at": "2026-03-27T10:48:48.730Z",
+  "lane_tokens": {
+    "contexts": 3907,
+    "stubs": 0,
+    "summaries": 1968
+  },
+  "source_fingerprint": "b0e28db27d4b633db479002c1f67e47d5272b0bc7eee58a004942be2d4c93e35",
+  "total_tokens": 5875,
+  "version": 1
+}

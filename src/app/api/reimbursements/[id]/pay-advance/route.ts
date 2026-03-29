@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   try {
     const auth = await requireAuth(request);
-    requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+    requireRole(auth, ["ACCOUNTANT"]);
 
     const { id } = await params;
     const body = await readJsonBody<{ note?: string }>(request);

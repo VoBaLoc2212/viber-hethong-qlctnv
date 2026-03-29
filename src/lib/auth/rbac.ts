@@ -131,7 +131,7 @@ export const NAV_ITEMS: Array<{
   },
   {
     href: "/reimbursement",
-    label: "Hoàn ứng công tác",
+    label: "Hoàn ứng",
     icon: "reimbursement",
     roles: ALL_ROLES,
   },

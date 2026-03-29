@@ -166,7 +166,7 @@ export async function getReimbursementById(auth: AuthContext, id: string) {
 }
 
 export async function createReimbursementRequest(auth: AuthContext, payload: CreateReimbursementPayload, correlationId: string) {
-  requireRole(auth, ["EMPLOYEE", "FINANCE_ADMIN"]);
+  requireRole(auth, ["EMPLOYEE"]);
 
   const purpose = payload.purpose?.trim();
   if (!purpose) throw new AppError("purpose is required", "INVALID_INPUT");
@@ -200,7 +200,7 @@ export async function createReimbursementRequest(auth: AuthContext, payload: Cre
 }
 
 export async function approveAdvance(auth: AuthContext, id: string, note: string | undefined, correlationId: string) {
-  requireRole(auth, ["MANAGER", "FINANCE_ADMIN"]);
+  requireRole(auth, ["MANAGER"]);
 
   return prisma.$transaction(async (db) => {
     const row = await db.reimbursement.findUnique({ where: { id } });
@@ -238,7 +238,7 @@ export async function approveAdvance(auth: AuthContext, id: string, note: string
 }
 
 export async function rejectReimbursement(auth: AuthContext, id: string, reason: string | undefined, correlationId: string) {
-  requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
+  requireRole(auth, ["MANAGER", "ACCOUNTANT"]);
 
   return prisma.$transaction(async (db) => {
     const row = await db.reimbursement.findUnique({ where: { id } });
@@ -276,7 +276,7 @@ export async function rejectReimbursement(auth: AuthContext, id: string, reason:
 }
 
 export async function payAdvance(auth: AuthContext, id: string, note: string | undefined, correlationId: string) {
-  requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+  requireRole(auth, ["ACCOUNTANT"]);
 
   return prisma.$transaction(async (db) => {
     const row = await db.reimbursement.findUnique({ where: { id } });
@@ -313,7 +313,7 @@ export async function payAdvance(auth: AuthContext, id: string, note: string | u
 }
 
 export async function submitSettlement(auth: AuthContext, id: string, payload: SubmitSettlementPayload, correlationId: string) {
-  requireRole(auth, ["EMPLOYEE", "FINANCE_ADMIN"]);
+  requireRole(auth, ["EMPLOYEE"]);
 
   const actualAmount = payload.actualAmount?.trim();
   if (!actualAmount) throw new AppError("actualAmount is required", "INVALID_INPUT");
@@ -366,7 +366,7 @@ export async function submitSettlement(auth: AuthContext, id: string, payload: S
 }
 
 export async function reviewSettlement(auth: AuthContext, id: string, note: string | undefined, correlationId: string) {
-  requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+  requireRole(auth, ["ACCOUNTANT"]);
 
   return prisma.$transaction(async (db) => {
     const row = await db.reimbursement.findUnique({ where: { id } });
@@ -403,7 +403,7 @@ export async function reviewSettlement(auth: AuthContext, id: string, note: stri
 }
 
 export async function completeReimbursement(auth: AuthContext, id: string, correlationId: string) {
-  requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+  requireRole(auth, ["ACCOUNTANT"]);
 
   return prisma.$transaction(async (db) => {
     const row = await db.reimbursement.findUnique({ where: { id } });

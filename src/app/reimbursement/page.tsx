@@ -125,9 +125,9 @@ export default function ReimbursementPage() {
     },
   });
 
-  const isManager = currentUser?.role === "MANAGER" || currentUser?.role === "FINANCE_ADMIN";
-  const isAccountant = currentUser?.role === "ACCOUNTANT" || currentUser?.role === "FINANCE_ADMIN";
-  const isEmployee = currentUser?.role === "EMPLOYEE" || currentUser?.role === "FINANCE_ADMIN";
+  const isManager = currentUser?.role === "MANAGER";
+  const isAccountant = currentUser?.role === "ACCOUNTANT";
+  const isEmployee = currentUser?.role === "EMPLOYEE";
 
   const rows = data?.reimbursements ?? [];
 
@@ -198,7 +198,7 @@ export default function ReimbursementPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Hoàn ứng công tác</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Hoàn ứng</h1>
           <p className="text-muted-foreground mt-1">Quy trình tạm ứng, quyết toán và bù trừ tự động.</p>
         </div>
         {isEmployee ? (

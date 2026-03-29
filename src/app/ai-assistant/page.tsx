@@ -115,7 +115,7 @@ export default function AiAssistantPage() {
   }
 
   async function loadMessages(id: string) {
-    const response = await fetch(`/api/ai/sessions/${encodeURIComponent(id)}`, {
+    const response = await fetch(`/api/ai/sessions?id=${encodeURIComponent(id)}`, {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
@@ -181,7 +181,7 @@ export default function AiAssistantPage() {
 
   async function deleteSession(id: string) {
     setError(null);
-    const response = await fetch(`/api/ai/sessions/${encodeURIComponent(id)}`, {
+    const response = await fetch(`/api/ai/sessions?id=${encodeURIComponent(id)}`, {
       method: "DELETE",
       cache: "no-store",
       headers: {

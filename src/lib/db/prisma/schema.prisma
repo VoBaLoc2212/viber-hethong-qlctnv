@@ -35,6 +35,22 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum ReimbursementStatus {
+  PENDING_APPROVAL
+  ADVANCE_APPROVED
+  ADVANCE_PAID
+  SETTLEMENT_SUBMITTED
+  SETTLEMENT_REVIEWED
+  COMPLETED
+  REJECTED
+}
+
+enum SettlementDirection {
+  RETURN_TO_COMPANY
+  PAY_TO_EMPLOYEE
+  NO_CHANGE
+}
+
 enum RecurringFrequency {
   DAILY
   WEEKLY
@@ -114,6 +130,10 @@ model User {
   chatSessions ChatSession[]
   knowledgeDocuments KnowledgeDocument[] @relation("KnowledgeUploader")
   notifications Notification[]   @relation("NotificationRecipient")
+  reimbursements Reimbursement[] @relation("ReimbursementEmployee")
+  approvedReimbursements Reimbursement[] @relation("ReimbursementApprover")
+  paidReimbursements Reimbursement[] @relation("ReimbursementPayer")
+  reviewedReimbursements Reimbursement[] @relation("ReimbursementReviewer")
 
   @@index([role])
 }
@@ -322,13 +342,40 @@ model BudgetTransfer {
 }
 
 model Reimbursement {
-  id             String   @id @default(uuid())
-  employeeId     String
-  advanceAmount  Decimal  @db.Decimal(18, 2)
-  actualAmount   Decimal? @db.Decimal(18, 2)
-  netAmount      Decimal? @db.Decimal(18, 2)
-  settledAt      DateTime?
-  createdAt      DateTime @default(now())
+  id            String              @id @default(uuid())
+  employeeId    String
+  approvedById  String?
+  paidById      String?
+  reviewedById  String?
+
+  purpose             String
+  advanceAmount       Decimal             @db.Decimal(18, 2)
+  actualAmount        Decimal?            @db.Decimal(18, 2)
+  netAmount           Decimal?            @db.Decimal(18, 2)
+  settlementDirection SettlementDirection?
+  settlementNote      String?
+  attachmentsJson     Json?
+
+  status               ReimbursementStatus @default(PENDING_APPROVAL)
+  advanceRequestedAt   DateTime            @default(now())
+  advanceApprovedAt    DateTime?
+  advancePaidAt        DateTime?
+  settlementSubmittedAt DateTime?
+  settlementReviewedAt DateTime?
+  completedAt          DateTime?
+  rejectedAt           DateTime?
+  rejectionReason      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  employee   User  @relation("ReimbursementEmployee", fields: [employeeId], references: [id])
+  approvedBy User? @relation("ReimbursementApprover", fields: [approvedById], references: [id])
+  paidBy     User? @relation("ReimbursementPayer", fields: [paidById], references: [id])
+  reviewedBy User? @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
+
+  @@index([employeeId, createdAt])
+  @@index([status, createdAt])
 }
 
 model RecurringTransaction {

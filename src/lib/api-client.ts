@@ -12,6 +12,15 @@ import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ReimbursementStatus =
+  | "PENDING_APPROVAL"
+  | "ADVANCE_APPROVED"
+  | "ADVANCE_PAID"
+  | "SETTLEMENT_SUBMITTED"
+  | "SETTLEMENT_REVIEWED"
+  | "COMPLETED"
+  | "REJECTED";
+export type SettlementDirection = "RETURN_TO_COMPANY" | "PAY_TO_EMPLOYEE" | "NO_CHANGE";
 export type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 export type Department = {
@@ -56,6 +65,36 @@ export type ApprovalItem = {
   approvedAt: string | null;
   createdAt: string;
   approver: { id: string; fullName: string; role: string } | null;
+};
+
+export type ReimbursementItem = {
+  id: string;
+  employeeId: string;
+  approvedById: string | null;
+  paidById: string | null;
+  reviewedById: string | null;
+  purpose: string;
+  advanceAmount: string;
+  actualAmount: string | null;
+  netAmount: string | null;
+  settlementDirection: SettlementDirection | null;
+  settlementNote: string | null;
+  attachments: Array<{ fileName: string; fileUrl: string; fileSize?: number | null; mimeType?: string | null }>;
+  status: ReimbursementStatus;
+  advanceRequestedAt: string;
+  advanceApprovedAt: string | null;
+  advancePaidAt: string | null;
+  settlementSubmittedAt: string | null;
+  settlementReviewedAt: string | null;
+  completedAt: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  employee?: { id: string; fullName: string; email: string };
+  approvedBy?: { id: string; fullName: string } | null;
+  paidBy?: { id: string; fullName: string } | null;
+  reviewedBy?: { id: string; fullName: string } | null;
 };
 
 export type NotificationItem = {
@@ -349,7 +388,10 @@ export function useGetApprovals(
 
   return useQuery({
     queryKey: ["/api/approvals", params],
-    queryFn: () => fetchJson<ApprovalItem[]>(url),
+    queryFn: async () => {
+      const result = await fetchJson<{ approvals: ApprovalItem[] }>(url);
+      return result.approvals;
+    },
     ...options,
   });
 }
@@ -372,6 +414,117 @@ export function useApprovalAction(opts?: {
       fetchJson<ApprovalItem>(`/api/approvals/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useGetReimbursements(
+  params: { page?: number; limit?: number; status?: ReimbursementStatus; mine?: boolean } = {},
+  options?: QueryHookOptions<{ reimbursements: ReimbursementItem[]; total: number; page: number; limit: number }>,
+) {
+  const search = new URLSearchParams();
+  if (params.page) search.set("page", String(params.page));
+  if (params.limit) search.set("limit", String(params.limit));
+  if (params.status) search.set("status", params.status);
+  if (params.mine) search.set("mine", "true");
+
+  const url = `/api/reimbursements${search.toString() ? `?${search.toString()}` : ""}`;
+
+  return useQuery({
+    queryKey: ["/api/reimbursements", params],
+    queryFn: async () => {
+      const token = typeof window !== "undefined" ? window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) : null;
+      const res = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        let message = `Request failed: ${res.status}`;
+        try {
+          const body = (await res.json()) as any;
+          message = body?.message ?? body?.error ?? message;
+        } catch {
+          // ignore
+        }
+        throw new Error(message);
+      }
+
+      const payload = (await res.json()) as {
+        data: { reimbursements: ReimbursementItem[] };
+        meta?: { total?: number; page?: number; limit?: number };
+      };
+
+      return {
+        reimbursements: payload.data.reimbursements,
+        total: payload.meta?.total ?? payload.data.reimbursements.length,
+        page: payload.meta?.page ?? params.page ?? 1,
+        limit: payload.meta?.limit ?? params.limit ?? payload.data.reimbursements.length,
+      };
+    },
+    ...options,
+  });
+}
+
+export function useCreateReimbursement(opts?: {
+  mutation?: UseMutationOptions<
+    ReimbursementItem,
+    Error,
+    {
+      data: {
+        purpose: string;
+        advanceAmount: string;
+      };
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ data }) =>
+      fetchJson<ReimbursementItem>("/api/reimbursements", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useGetReimbursementById(id: string | null, options?: QueryHookOptions<ReimbursementItem>) {
+  return useQuery({
+    queryKey: ["/api/reimbursements", id],
+    queryFn: () => fetchJson<ReimbursementItem>(`/api/reimbursements/${id}`),
+    enabled: Boolean(id),
+    ...options,
+  });
+}
+
+type ReimbursementAction =
+  | "approve"
+  | "reject"
+  | "pay-advance"
+  | "submit-settlement"
+  | "review-settlement"
+  | "complete";
+
+export function useReimbursementAction(opts?: {
+  mutation?: UseMutationOptions<
+    ReimbursementItem,
+    Error,
+    {
+      id: string;
+      action: ReimbursementAction;
+      data?: Record<string, unknown>;
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ id, action, data }) =>
+      fetchJson<ReimbursementItem>(`/api/reimbursements/${id}/${action}`, {
+        method: "POST",
+        body: JSON.stringify(data ?? {}),
       }),
     ...(opts?.mutation ?? {}),
   });

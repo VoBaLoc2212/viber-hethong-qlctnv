@@ -11,6 +11,14 @@ const ANALYSIS_PATTERN = /so sánh|phân tích|vì sao|nguyên nhân|top|xếp h
 const GUIDANCE_PATTERN = /làm sao|hướng dẫn|quy trình|hard stop|chính sách|help|hỗ trợ/i;
 const KPI_DATA_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại/i;
 const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại/i;
+const NORMALIZED_SERVICE_DATA_PATTERN = /chi phi|ngan?\s*sach|giao dich|expense|income|approval|phe duyet|phong ban|department|bao cao|report|doanh thu|fx|ty gia|usd|vnd|q[1-4]|quy|thang|nam|kpi|danh muc|tong ngan sach|tong chi|tong thu|so du|con lai hien tai|budget/i;
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
 
 export function ruleBasedIntent(message: string): AiIntent {
   if (GREETING_PATTERN.test(message.trim())) return "GREETING";
@@ -40,7 +48,8 @@ export function normalizeIntent(raw: string | null): AiIntent | null {
 }
 
 export function isLikelyServiceDataQuestion(message: string): boolean {
-  return SERVICE_DATA_PATTERN.test(message);
+  if (SERVICE_DATA_PATTERN.test(message)) return true;
+  return NORMALIZED_SERVICE_DATA_PATTERN.test(normalizeSearchText(message));
 }
 
 export async function resolveIntent(userId: string, message: string): Promise<AiIntent> {

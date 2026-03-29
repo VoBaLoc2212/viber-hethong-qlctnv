@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { format } from "date-fns";
@@ -42,9 +42,9 @@ const STATUS_CONFIG: Record<
   ApprovalStatus,
   { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
 > = {
-  PENDING: { label: "Ch\u1EDD duy\u1EC7t", variant: "secondary" },
-  APPROVED: { label: "\u0110\u00E3 duy\u1EC7t", variant: "default" },
-  REJECTED: { label: "T\u1EEB ch\u1ED1i", variant: "destructive" },
+  PENDING: { label: "Chờ duyệt", variant: "secondary" },
+  APPROVED: { label: "Đã duyệt", variant: "default" },
+  REJECTED: { label: "Từ chối", variant: "destructive" },
 };
 
 function StatusBadge({ status }: { status: ApprovalStatus }) {
@@ -74,10 +74,10 @@ function ActionButtons({
     return (
       <div className="flex gap-1 justify-end">
         <Button size="sm" variant="default" className="gap-1 h-7 text-xs" onClick={() => onAction(item, "approve")}>
-          <CheckCircle2 className="w-3 h-3" /> Duy\u1EC7t
+          <CheckCircle2 className="w-3 h-3" /> Duyệt
         </Button>
         <Button size="sm" variant="destructive" className="gap-1 h-7 text-xs" onClick={() => onAction(item, "reject")}>
-          <XCircle className="w-3 h-3" /> T\u1EEB ch\u1ED1i
+          <XCircle className="w-3 h-3" /> Từ chối
         </Button>
       </div>
     );
@@ -89,7 +89,7 @@ function ActionButtons({
           <Banknote className="w-3 h-3" /> Chi
         </Button>
         <Button size="sm" variant="destructive" className="gap-1 h-7 text-xs" onClick={() => onAction(item, "not-execute")}>
-          <Ban className="w-3 h-3" /> Kh\u00F4ng chi
+          <Ban className="w-3 h-3" /> Không chi
         </Button>
       </div>
     );
@@ -119,12 +119,12 @@ export default function ApprovalsPage() {
     mutation: {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: ["/api/approvals"] });
-        toast({ title: "Th\u00E0nh c\u00F4ng", description: "\u0110\u00E3 c\u1EADp nh\u1EADt tr\u1EA1ng th\u00E1i phi\u1EBFu." });
+        toast({ title: "Thành công", description: "Đã cập nhật trạng thái phiếu." });
         setActionDialog(null);
         setNote("");
       },
       onError: (err: Error) => {
-        toast({ title: "L\u1ED7i", description: err.message, variant: "destructive" });
+        toast({ title: "Lỗi", description: err.message, variant: "destructive" });
       },
     },
   });
@@ -133,7 +133,7 @@ export default function ApprovalsPage() {
     return (
       <div className="p-6">
         <Card className="p-8 text-center text-muted-foreground">
-          B\u1EA1n kh\u00F4ng c\u00F3 quy\u1EC1n truy c\u1EADp trang n\u00E0y.
+          Bạn không có quyền truy cập trang này.
         </Card>
       </div>
     );
@@ -156,29 +156,29 @@ export default function ApprovalsPage() {
   }
 
   const actionLabels: Record<string, string> = {
-    approve: "Duy\u1EC7t",
-    reject: "Kh\u00F4ng duy\u1EC7t",
+    approve: "Duyệt",
+    reject: "Không duyệt",
     execute: "Chi",
-    "not-execute": "Kh\u00F4ng chi",
+    "not-execute": "Không chi",
   };
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">
-          Quy tr\u00ECnh Duy\u1EC7t chi
+          Quy trình Duyệt chi
         </h1>
         <p className="text-muted-foreground mt-1">
-          Phi\u1EBFu c\u1EA7n x\u1EED l\u00FD v\u00E0 l\u1ECBch s\u1EED phi\u1EBFu \u0111\u00E3 duy\u1EC7t
+          Phiếu cần xử lý và lịch sử phiếu đã duyệt
         </p>
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
-          <TabsTrigger value="all">T\u1EA5t c\u1EA3</TabsTrigger>
-          <TabsTrigger value="pending">Ch\u1EDD duy\u1EC7t</TabsTrigger>
-          <TabsTrigger value="approved">\u0110\u00E3 duy\u1EC7t</TabsTrigger>
-          <TabsTrigger value="rejected">T\u1EEB ch\u1ED1i</TabsTrigger>
+          <TabsTrigger value="all">Tất cả</TabsTrigger>
+          <TabsTrigger value="pending">Chờ duyệt</TabsTrigger>
+          <TabsTrigger value="approved">Đã duyệt</TabsTrigger>
+          <TabsTrigger value="rejected">Từ chối</TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-4">
@@ -190,21 +190,21 @@ export default function ApprovalsPage() {
             </div>
           ) : !approvals || approvals.length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground">
-              Kh\u00F4ng c\u00F3 phi\u1EBFu n\u00E0o.
+              Không có phiếu nào.
             </Card>
           ) : (
             <Card>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>M\u00E3 GD</TableHead>
-                    <TableHead>M\u00F4 t\u1EA3</TableHead>
-                    <TableHead className="text-right">S\u1ED1 ti\u1EC1n</TableHead>
-                    <TableHead>Tr\u1EA1ng th\u00E1i GD</TableHead>
-                    <TableHead>Tr\u1EA1ng th\u00E1i duy\u1EC7t</TableHead>
-                    <TableHead>Ng\u01B0\u1EDDi duy\u1EC7t</TableHead>
-                    <TableHead>Ng\u00E0y t\u1EA1o</TableHead>
-                    <TableHead className="text-right">H\u00E0nh \u0111\u1ED9ng</TableHead>
+                    <TableHead>Mã GD</TableHead>
+                    <TableHead>Mô tả</TableHead>
+                    <TableHead className="text-right">Số tiền</TableHead>
+                    <TableHead>Trạng thái GD</TableHead>
+                    <TableHead>Trạng thái duyệt</TableHead>
+                    <TableHead>Người duyệt</TableHead>
+                    <TableHead>Ngày tạo</TableHead>
+                    <TableHead className="text-right">Hành động</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -212,7 +212,7 @@ export default function ApprovalsPage() {
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-xs">{item.transactionCode}</TableCell>
                       <TableCell className="max-w-[200px] truncate">
-                        {item.transactionDescription || "\u2014"}
+                        {item.transactionDescription || "—"}
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {formatCurrency(item.transactionAmount)}
@@ -223,7 +223,7 @@ export default function ApprovalsPage() {
                       <TableCell>
                         <StatusBadge status={item.status} />
                       </TableCell>
-                      <TableCell>{item.approver?.fullName ?? "\u2014"}</TableCell>
+                      <TableCell>{item.approver?.fullName ?? "—"}</TableCell>
                       <TableCell className="text-xs">
                         {format(new Date(item.createdAt), "dd/MM/yyyy HH:mm")}
                       </TableCell>
@@ -249,25 +249,25 @@ export default function ApprovalsPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {actionDialog && actionLabels[actionDialog.action]} phi\u1EBFu{" "}
+              {actionDialog && actionLabels[actionDialog.action]} phiếu{" "}
               {actionDialog?.item.transactionCode}
             </DialogTitle>
             <DialogDescription>
-              S\u1ED1 ti\u1EC1n: {actionDialog && formatCurrency(actionDialog.item.transactionAmount)}
+              Số tiền: {actionDialog && formatCurrency(actionDialog.item.transactionAmount)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Ghi ch\u00FA</label>
+            <label className="text-sm font-medium">Ghi chú</label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Nh\u1EADp ghi ch\u00FA (kh\u00F4ng b\u1EAFt bu\u1ED9c)..."
+              placeholder="Nhập ghi chú (không bắt buộc)..."
               rows={3}
             />
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setActionDialog(null)}>
-              H\u1EE7y
+              Hủy
             </Button>
             <Button
               onClick={handleConfirmAction}

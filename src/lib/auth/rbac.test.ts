@@ -69,6 +69,7 @@ describe("rbac api consistency", () => {
   it("covers critical API endpoints by at least one API rule", () => {
     const criticalEndpoints = [
       "/api/approvals",
+      "/api/reimbursements",
       "/api/budgets",
       "/api/controls/hard-stop",
       "/api/fx-rates",

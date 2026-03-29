@@ -11,6 +11,7 @@ import type { AiIntent, AiResolution } from "../types";
 
 const REPORT_ROLES = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] as const;
 const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký|tổng thu|tổng chi|tổng ngân sách|số dư|doanh số|thu hiện tại|chi hiện tại/i;
+const NORMALIZED_SERVICE_DATA_PATTERN = /chi phi|ngan?\s*sach|giao dich|expense|income|approval|phe duyet|phong ban|department|bao cao|report|doanh thu|fx|ty gia|usd|vnd|q[1-4]|quy|thang|nam|kpi|danh muc|audit|log|nhat ky|tong thu|tong chi|tong ngan sach|so du|doanh so|thu hien tai|chi hien tai|budget/i;
 const KPI_SUMMARY_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại/i;
 
 function canUseReport(auth: AuthContext) {
@@ -60,8 +61,9 @@ function tokenizeSearchText(value: string) {
 
 export async function resolveByService(auth: AuthContext, intent: AiIntent, message: string): Promise<AiResolution | null> {
   const text = message.toLowerCase();
+  const normalizedText = normalizeSearchText(message);
 
-  const isServiceDataQuestion = SERVICE_DATA_PATTERN.test(message);
+  const isServiceDataQuestion = SERVICE_DATA_PATTERN.test(message) || NORMALIZED_SERVICE_DATA_PATTERN.test(normalizedText);
   if (intent === "QUERY" && !isServiceDataQuestion) {
     return null;
   }
@@ -227,12 +229,11 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
     };
   }
 
-  if (text.includes("ngân sách") || text.includes("budget") || /chi phí tháng\s*\d+/i.test(message)) {
+  if (/\bngan?\s*sach\b|\bbudget\b/i.test(normalizedText) || /chi\s*phi\s*thang\s*\d+/i.test(normalizedText)) {
     const budgets = await tryService(() => listBudgets(auth, { page: 1, limit: 200 }));
     if (!budgets) return null;
 
-    const lower = message.toLowerCase();
-    const monthMatch = lower.match(/tháng\s*(\d{1,2})/i);
+    const monthMatch = normalizedText.match(/thang\s*(\d{1,2})/i);
 
     let filtered = budgets.data;
     let matchedPeriod: string | null = null;
@@ -274,7 +275,7 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
       filtered = filtered.filter((item) => item.departmentId === selected.id);
     }
 
-    const isRemainingQuestion = /còn bao nhiêu|còn lại|remaining|available/i.test(message);
+    const isRemainingQuestion = /con\s*bao\s*nhieu|con\s*lai|remaining|available/i.test(normalizedText);
 
     const budgetTotals = filtered.reduce(
       (acc, item) => ({

@@ -25,7 +25,7 @@ export const ROUTE_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   { matcher: /^\/budgets(?:\/.*)?$/, roles: ANALYST_ROLES },
   { matcher: /^\/approvals(?:\/.*)?$/, roles: ANALYST_ROLES },
   {
-    matcher: /^\/(?:dashboard|transactions|ai-assistant)(?:\/.*)?$/,
+    matcher: /^\/(?:dashboard|transactions|reimbursement|ai-assistant)(?:\/.*)?$/,
     roles: ALL_ROLES,
   },
 ];
@@ -46,6 +46,10 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   {
     matcher: /^\/api\/approvals(?:\/.*)?$/,
     roles: ANALYST_ROLES,
+  },
+  {
+    matcher: /^\/api\/reimbursements(?:\/.*)?$/,
+    roles: ALL_ROLES,
   },
   {
     matcher: /^\/api\/budgets(?:\/.*)?$/,
@@ -92,7 +96,7 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
 export const NAV_ITEMS: Array<{
   href: string;
   label: string;
-  icon: "dashboard" | "transactions" | "budgeting" | "budgets" | "reports" | "security" | "users" | "assistant" | "fxRates" | "approvals";
+  icon: "dashboard" | "transactions" | "budgeting" | "budgets" | "reports" | "security" | "users" | "assistant" | "fxRates" | "approvals" | "reimbursement";
   roles: UserRole[];
 }> = [
   {
@@ -124,6 +128,12 @@ export const NAV_ITEMS: Array<{
     label: "Quy trình duyệt chi",
     icon: "approvals",
     roles: ANALYST_ROLES,
+  },
+  {
+    href: "/reimbursement",
+    label: "Hoàn ứng công tác",
+    icon: "reimbursement",
+    roles: ALL_ROLES,
   },
   {
     href: "/reports",

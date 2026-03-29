@@ -1,0 +1,2 @@
+ALTER TABLE "Approval"
+  ALTER COLUMN "approverId" DROP NOT NULL;

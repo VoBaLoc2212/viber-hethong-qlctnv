@@ -46,6 +46,9 @@ describe("intent-router", () => {
   it("detects service data questions", () => {
     expect(isLikelyServiceDataQuestion("Chi phí tháng 1 của phòng Marketing?")).toBe(true);
     expect(isLikelyServiceDataQuestion("Top danh mục chi phí quý này")).toBe(true);
+    expect(isLikelyServiceDataQuestion("ngan sach marketing")).toBe(true);
+    expect(isLikelyServiceDataQuestion("nga sach marketing")).toBe(true);
+    expect(isLikelyServiceDataQuestion("marketing budget")).toBe(true);
   });
 
   it("detects non-service general questions", () => {

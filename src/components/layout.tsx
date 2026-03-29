@@ -20,6 +20,7 @@ import {
   Menu,
   Coins,
   ClipboardCheck,
+  HandCoins,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -56,6 +57,7 @@ const ICONS: Record<(typeof NAV_ITEMS)[number]["icon"], LucideIcon> = {
   assistant: Bot,
   fxRates: Coins,
   approvals: ClipboardCheck,
+  reimbursement: HandCoins,
 };
 
 export function AppLayout({ children }: { children: ReactNode }) {

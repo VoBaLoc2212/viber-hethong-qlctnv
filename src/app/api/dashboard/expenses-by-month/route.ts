@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([, v]) => v);
 
-    return ok({ rows: sorted.slice(-6) }, {});
+    return ok({ rows: sorted.slice(-6), currency: "VND" as const }, { currency: "VND" });
   } catch (error) {
     return handleApiError(request, error);
   }

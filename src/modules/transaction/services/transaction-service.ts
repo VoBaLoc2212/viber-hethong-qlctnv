@@ -1,8 +1,10 @@
 import type { Prisma, TransactionStatus, TransactionType } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
+import { convertUsdToVndByDate } from "@/modules/fx";
 import {
   addMoney,
+  assertNotAuditorForMutation,
   calculateAvailable,
   compareMoney,
   type AuthContext,
@@ -26,6 +28,12 @@ function ensureIncomeStatus(status: TransactionStatus) {
   if (!allowed.includes(status)) {
     throw new AppError("Income status must be APPROVED or EXECUTED", "INVALID_INPUT");
   }
+}
+
+function normalizeCurrency(value?: string | null): string | null {
+  if (value == null) return null;
+  const normalized = value.trim().toUpperCase();
+  return normalized.length ? normalized : null;
 }
 
 type ApprovalStatusCompat = "PENDING" | "APPROVED" | "REJECTED";
@@ -134,6 +142,7 @@ type ListTransactionsFilter = {
   status?: TransactionStatus;
   departmentId?: string;
   budgetId?: string;
+  q?: string;
 };
 
 export async function listTransactions(auth: AuthContext, filter: ListTransactionsFilter) {
@@ -143,11 +152,21 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
   const limit = Number.isFinite(filter.limit) && filter.limit > 0 ? Math.min(filter.limit, 100) : 20;
   const skip = (page - 1) * limit;
 
+  const keyword = filter.q?.trim().slice(0, 100);
+
   const where: Prisma.TransactionWhereInput = {
     type: filter.type,
     status: filter.status,
     departmentId: filter.departmentId,
     budgetId: filter.budgetId,
+    ...(keyword
+      ? {
+          OR: [
+            { code: { contains: keyword, mode: "insensitive" } },
+            { description: { contains: keyword, mode: "insensitive" } },
+          ],
+        }
+      : {}),
   };
 
   const [total, rows] = await Promise.all([
@@ -201,17 +220,31 @@ type CreateTransactionPayload = {
 
 export async function createTransaction(auth: AuthContext, payload: CreateTransactionPayload, correlationId: string) {
   requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
+  assertNotAuditorForMutation(auth);
 
   if (!payload.type) {
     throw new AppError("type is required", "INVALID_INPUT");
   }
 
-  if (!payload.amount || compareMoney(payload.amount, "0.00") <= 0) {
-    throw new AppError("amount must be greater than 0", "INVALID_INPUT");
+  const txType = payload.type;
+  const inputFxCurrency = normalizeCurrency(payload.fxCurrency);
+  const isUsdExpense = txType === "EXPENSE" && inputFxCurrency === "USD";
+
+  if (inputFxCurrency && inputFxCurrency !== "USD" && inputFxCurrency !== "VND") {
+    throw new AppError("fxCurrency is not supported", "INVALID_INPUT");
   }
 
-  const txType = payload.type;
-  const txAmount = payload.amount;
+  if (inputFxCurrency === "USD" && txType !== "EXPENSE") {
+    throw new AppError("USD is currently supported for EXPENSE only", "UNPROCESSABLE_ENTITY");
+  }
+
+  if (isUsdExpense && !payload.date) {
+    throw new AppError("date is required for USD expense", "INVALID_INPUT");
+  }
+
+  if (!isUsdExpense && (!payload.amount || compareMoney(payload.amount, "0.00") <= 0)) {
+    throw new AppError("amount must be greater than 0", "INVALID_INPUT");
+  }
 
   const status = payload.status ?? (txType === "EXPENSE" ? "PENDING" : "APPROVED");
 
@@ -227,12 +260,25 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
     throw new AppError("date is invalid", "INVALID_INPUT");
   }
 
-  const fxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
-  if (payload.fxRateFetchedAt && (!fxRateFetchedAt || Number.isNaN(fxRateFetchedAt.getTime()))) {
+  const clientFxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
+  if (payload.fxRateFetchedAt && (!clientFxRateFetchedAt || Number.isNaN(clientFxRateFetchedAt.getTime()))) {
     throw new AppError("fxRateFetchedAt is invalid", "INVALID_INPUT");
   }
 
+  if (isUsdExpense && (payload.fxRate || payload.baseAmount || payload.baseCurrency || payload.fxRateProvider || payload.fxRateFetchedAt)) {
+    throw new AppError(
+      "fxRate/baseAmount/baseCurrency/fxRateProvider/fxRateFetchedAt are server-managed for USD expense",
+      "INVALID_INPUT",
+    );
+  }
+
+  const txAmount = payload.amount ?? "";
+
   if (payload.splits && payload.splits.length > 0) {
+    if (isUsdExpense) {
+      throw new AppError("splits are not supported for USD expense", "UNPROCESSABLE_ENTITY");
+    }
+
     const splitTotal = payload.splits.reduce((acc, split) => addMoney(acc, split.amount), "0.00");
     if (compareMoney(splitTotal, txAmount) !== 0) {
       throw new AppError("Sum of splits must equal transaction amount", "INVALID_INPUT");
@@ -253,6 +299,34 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
       const amount = decimalToString(budget.amount);
       const reserved = decimalToString(budget.reserved);
       const used = decimalToString(budget.used);
+
+      let resolvedAmount = txAmount;
+      let resolvedCurrency = "VND";
+      let resolvedFxCurrency: string | null = null;
+      let resolvedFxAmount: string | null = null;
+      let resolvedFxRate: string | null = null;
+      let resolvedBaseCurrency: string | null = null;
+      let resolvedBaseAmount: string | null = null;
+      let resolvedFxRateProvider: string | null = null;
+      let resolvedFxRateFetchedAt: Date | null = null;
+
+      if (isUsdExpense) {
+        if (!payload.fxAmount || compareMoney(payload.fxAmount, "0.00") <= 0) {
+          throw new AppError("fxAmount must be greater than 0 for USD expense", "INVALID_INPUT");
+        }
+
+        const converted = await convertUsdToVndByDate(db, payload.fxAmount, txDate);
+        resolvedAmount = converted.convertedAmount;
+        resolvedCurrency = converted.convertedCurrency;
+        resolvedFxCurrency = converted.originalCurrency;
+        resolvedFxAmount = converted.originalAmount;
+        resolvedFxRate = converted.rate;
+        resolvedBaseCurrency = converted.convertedCurrency;
+        resolvedBaseAmount = converted.convertedAmount;
+        resolvedFxRateProvider = converted.source;
+        resolvedFxRateFetchedAt = new Date(converted.fetchedAt);
+      }
+
       const available = calculateAvailable(amount, reserved, used);
 
       if (compareMoney(available, "0.00") <= 0) {
@@ -262,12 +336,12 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         }
       }
 
-      if (compareMoney(available, txAmount) < 0) {
+      if (compareMoney(available, resolvedAmount) < 0) {
         throw new AppError("Insufficient available budget", "UNPROCESSABLE_ENTITY");
       }
 
       const policy = await getPolicyForBudgetTx(db, budget.id);
-      const nextReserved = addMoney(reserved, txAmount);
+      const nextReserved = addMoney(reserved, resolvedAmount);
       const usagePercent =
         Number(amount) > 0 ? Number((((Number(used) + Number(nextReserved)) / Number(amount)) * 100).toFixed(2)) : 0;
       const warningTriggered = usagePercent >= policy.warningThresholdPct;
@@ -277,18 +351,18 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           code,
           type: txType,
           status,
-          amount: txAmount,
-          currency: "VND",
+          amount: resolvedAmount,
+          currency: resolvedCurrency,
           date: txDate,
           description: payload.description ?? null,
           recurringSourceId: payload.recurringSourceId ?? null,
-          fxCurrency: payload.fxCurrency ?? null,
-          fxAmount: payload.fxAmount ?? null,
-          fxRate: payload.fxRate ?? null,
-          baseCurrency: payload.baseCurrency ?? null,
-          baseAmount: payload.baseAmount ?? null,
-          fxRateProvider: payload.fxRateProvider ?? null,
-          fxRateFetchedAt,
+          fxCurrency: resolvedFxCurrency,
+          fxAmount: resolvedFxAmount,
+          fxRate: resolvedFxRate,
+          baseCurrency: resolvedBaseCurrency,
+          baseAmount: resolvedBaseAmount,
+          fxRateProvider: resolvedFxRateProvider,
+          fxRateFetchedAt: resolvedFxRateFetchedAt,
           budgetId: budget.id,
           departmentId: payload.departmentId ?? budget.departmentId,
           createdById: auth.userId,
@@ -334,11 +408,18 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           payload: {
             type: transaction.type,
             status: transaction.status,
-            amount: txAmount,
+            amount: resolvedAmount,
             budgetId: budget.id,
             warningTriggered,
             warningThresholdPct: policy.warningThresholdPct,
             hardStopEnabled: policy.hardStopEnabled,
+            fxCurrency: resolvedFxCurrency,
+            fxAmount: resolvedFxAmount,
+            fxRate: resolvedFxRate,
+            baseCurrency: resolvedBaseCurrency,
+            baseAmount: resolvedBaseAmount,
+            fxRateProvider: resolvedFxRateProvider,
+            fxRateFetchedAt: resolvedFxRateFetchedAt?.toISOString() ?? null,
           },
         },
       });
@@ -375,13 +456,13 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         date: txDate,
         description: payload.description ?? null,
         recurringSourceId: payload.recurringSourceId ?? null,
-        fxCurrency: payload.fxCurrency ?? null,
+        fxCurrency: inputFxCurrency,
         fxAmount: payload.fxAmount ?? null,
         fxRate: payload.fxRate ?? null,
         baseCurrency: payload.baseCurrency ?? null,
         baseAmount: payload.baseAmount ?? null,
         fxRateProvider: payload.fxRateProvider ?? null,
-        fxRateFetchedAt,
+        fxRateFetchedAt: clientFxRateFetchedAt,
         budgetId: payload.budgetId ?? null,
         departmentId: payload.departmentId ?? null,
         createdById: auth.userId,
@@ -438,6 +519,13 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           referenceType: "TRANSACTION",
           referenceId: transaction.id,
           createdById: auth.userId,
+          fxCurrency: transaction.fxCurrency,
+          fxAmount: transaction.fxAmount,
+          fxRate: transaction.fxRate,
+          baseCurrency: transaction.baseCurrency,
+          baseAmount: transaction.baseAmount,
+          fxRateProvider: transaction.fxRateProvider,
+          fxRateFetchedAt: transaction.fxRateFetchedAt,
           metadata: {
             transactionCode: transaction.code,
           },
@@ -497,6 +585,8 @@ export async function changeTransactionStatus(
   payload: ChangeStatusPayload,
   correlationId: string,
 ) {
+  assertNotAuditorForMutation(auth);
+
   if (!payload.action) {
     throw new AppError("action is required", "INVALID_INPUT");
   }
@@ -758,6 +848,13 @@ export async function changeTransactionStatus(
             referenceType: "TRANSACTION",
             referenceId: tx.id,
             createdById: auth.userId,
+            fxCurrency: tx.fxCurrency,
+            fxAmount: tx.fxAmount,
+            fxRate: tx.fxRate,
+            baseCurrency: tx.baseCurrency,
+            baseAmount: tx.baseAmount,
+            fxRateProvider: tx.fxRateProvider,
+            fxRateFetchedAt: tx.fxRateFetchedAt,
             metadata: {
               transactionCode: tx.code,
               budgetId: budget.id,

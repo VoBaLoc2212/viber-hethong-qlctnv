@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma/client";
 import {
   type AuthContext,
   addMoney,
+  assertNotAuditorForMutation,
   calculateAvailable,
   compareMoney,
   isNegativeMoney,
@@ -138,6 +139,7 @@ export async function listBudgets(auth: AuthContext, filter: BudgetFilter) {
 
 export async function createBudget(auth: AuthContext, payload: CreateBudgetPayload, correlationId: string) {
   requireRole(auth, ["FINANCE_ADMIN"]);
+  assertNotAuditorForMutation(auth);
 
   ensureMoneyInput(payload.amount, "amount");
   if (!payload.departmentId || !payload.period) {
@@ -199,6 +201,7 @@ export async function updateBudgetById(
   correlationId: string,
 ) {
   requireRole(auth, ["FINANCE_ADMIN"]);
+  assertNotAuditorForMutation(auth);
 
   ensureMoneyInput(payload.amount, "amount");
 
@@ -289,6 +292,7 @@ export async function getBudgetHistory(auth: AuthContext, id: string) {
 
 export async function deleteBudgetById(auth: AuthContext, id: string, correlationId: string) {
   requireRole(auth, ["FINANCE_ADMIN"]);
+  assertNotAuditorForMutation(auth);
 
   const budget = await prisma.budget.findUnique({ where: { id } });
   if (!budget) {
@@ -383,6 +387,7 @@ export async function transferBudget(
   correlationId: string,
 ) {
   requireRole(auth, ["FINANCE_ADMIN", "MANAGER"]);
+  assertNotAuditorForMutation(auth);
 
   if (!idempotencyKey) {
     throw new AppError("idempotency-key header is required", "INVALID_INPUT");
@@ -526,6 +531,7 @@ export async function configureHardStop(
   correlationId: string,
 ) {
   requireRole(auth, ["FINANCE_ADMIN"]);
+  assertNotAuditorForMutation(auth);
 
   if (typeof payload.enabled !== "boolean") {
     throw new AppError("enabled is required", "INVALID_INPUT");

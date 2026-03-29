@@ -13,7 +13,7 @@ export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
 
 export type Department = {
-  id: number;
+  id: string;
   name: string;
   code: string;
   budgetAllocated: number;
@@ -47,12 +47,41 @@ export type DashboardKpis = {
   totalIncome: number;
   transactionCount: number;
   pendingCount: number;
+  currency?: "VND" | "USD";
 };
 
 export type ExpensesByMonthRow = {
   month: string;
   income: number;
   expenses: number;
+};
+
+export type ExpensesByMonthPayload = {
+  rows: ExpensesByMonthRow[];
+  currency?: "VND" | "USD";
+};
+
+export type FxRate = {
+  id: string;
+  fromCurrency: "USD" | "VND";
+  toCurrency: "USD" | "VND";
+  rate: string;
+  rateDate: string;
+  source: string;
+  fetchedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GetFxRatesParams = {
+  page?: number;
+  limit?: number;
+  fromCurrency?: string;
+  toCurrency?: string;
+  source?: string;
+  rateDateFrom?: string;
+  rateDateTo?: string;
+  q?: string;
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -112,15 +141,20 @@ export type GetTransactionsParams = {
   type?: TransactionType;
   status?: TransactionStatus;
   departmentId?: number;
+  q?: string;
 };
 
-export function useGetTransactions(params: GetTransactionsParams = {}, options?: UseQueryOptions<Paginated<Transaction>>) {
+export function useGetTransactions(
+  params: GetTransactionsParams = {},
+  options?: Omit<UseQueryOptions<Paginated<Transaction>>, "queryKey" | "queryFn">,
+) {
   const search = new URLSearchParams();
   if (params.page) search.set("page", String(params.page));
   if (params.limit) search.set("limit", String(params.limit));
   if (params.type) search.set("type", params.type);
   if (params.status) search.set("status", params.status);
   if (params.departmentId != null) search.set("departmentId", String(params.departmentId));
+  if (params.q?.trim()) search.set("q", params.q.trim());
   const url = `/api/transactions${search.toString() ? `?${search.toString()}` : ""}`;
 
   return useQuery({
@@ -166,7 +200,9 @@ export function useUpdateTransactionStatus(opts?: {
   });
 }
 
-export function useGetDashboardKpis(options?: UseQueryOptions<DashboardKpis>) {
+export function useGetDashboardKpis(
+  options?: Omit<UseQueryOptions<DashboardKpis>, "queryKey" | "queryFn">,
+) {
   return useQuery({
     queryKey: ["/api/dashboard/kpis"],
     queryFn: () => fetchJson<DashboardKpis>("/api/dashboard/kpis"),
@@ -178,9 +214,81 @@ export function useGetExpensesByMonth(options?: UseQueryOptions<ExpensesByMonthR
   return useQuery({
     queryKey: ["/api/dashboard/expenses-by-month"],
     queryFn: async () => {
-      const result = await fetchJson<{ rows: ExpensesByMonthRow[] }>("/api/dashboard/expenses-by-month");
+      const result = await fetchJson<ExpensesByMonthPayload>("/api/dashboard/expenses-by-month");
       return result.rows;
     },
     ...options,
+  });
+}
+
+export function useGetFxRates(
+  params: GetFxRatesParams = {},
+  options?: Omit<UseQueryOptions<Paginated<FxRate>>, "queryKey" | "queryFn">,
+) {
+  const search = new URLSearchParams();
+  if (params.page) search.set("page", String(params.page));
+  if (params.limit) search.set("limit", String(params.limit));
+  if (params.fromCurrency?.trim()) search.set("fromCurrency", params.fromCurrency.trim().toUpperCase());
+  if (params.toCurrency?.trim()) search.set("toCurrency", params.toCurrency.trim().toUpperCase());
+  if (params.source?.trim()) search.set("source", params.source.trim());
+  if (params.rateDateFrom?.trim()) search.set("rateDateFrom", params.rateDateFrom.trim());
+  if (params.rateDateTo?.trim()) search.set("rateDateTo", params.rateDateTo.trim());
+  if (params.q?.trim()) search.set("q", params.q.trim());
+
+  const url = `/api/fx-rates${search.toString() ? `?${search.toString()}` : ""}`;
+
+  return useQuery({
+    queryKey: ["/api/fx-rates", params],
+    queryFn: () => fetchJson<Paginated<FxRate>>(url),
+    ...options,
+  });
+}
+
+export function useCreateFxRate(opts?: {
+  mutation?: UseMutationOptions<
+    FxRate,
+    Error,
+    {
+      data: {
+        fromCurrency: string;
+        toCurrency: string;
+        rateDate: string;
+        rate: string;
+        source?: string;
+      };
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ data }) =>
+      fetchJson<FxRate>("/api/fx-rates", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useUpdateFxRate(opts?: {
+  mutation?: UseMutationOptions<
+    FxRate,
+    Error,
+    {
+      id: string;
+      data: {
+        rate?: string;
+        source?: string;
+        rateDate?: string;
+      };
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      fetchJson<FxRate>(`/api/fx-rates/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
   });
 }

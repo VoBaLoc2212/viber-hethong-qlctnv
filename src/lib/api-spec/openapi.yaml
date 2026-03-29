@@ -14,6 +14,8 @@ tags:
   - name: controls
   - name: logs
   - name: ledger
+  - name: fx-rates
+  - name: ai
 components:
   securitySchemes:
     bearerAuth:
@@ -709,6 +711,191 @@ paths:
       responses:
         "201":
           description: Reversal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /fx-rates:
+    get:
+      operationId: listFxRates
+      tags: [fx-rates]
+      summary: Danh sách tỷ giá (FINANCE_ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: fromCurrency
+          schema:
+            type: string
+        - in: query
+          name: toCurrency
+          schema:
+            type: string
+        - in: query
+          name: source
+          schema:
+            type: string
+        - in: query
+          name: rateDateFrom
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: rateDateTo
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: q
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Fx rate list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      operationId: createFxRate
+      tags: [fx-rates]
+      summary: Tạo tỷ giá theo ngày (FINANCE_ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fromCurrency:
+                  type: string
+                  example: USD
+                toCurrency:
+                  type: string
+                  example: VND
+                rateDate:
+                  type: string
+                  format: date
+                rate:
+                  type: string
+                  example: "25450.500000"
+                source:
+                  type: string
+                  example: MANUAL_ADMIN
+              required: [fromCurrency, toCurrency, rateDate, rate]
+      responses:
+        "201":
+          description: Fx rate created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /fx-rates/{id}:
+    put:
+      operationId: updateFxRateById
+      tags: [fx-rates]
+      summary: Cập nhật tỷ giá theo id (FINANCE_ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/correlationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rate:
+                  type: string
+                  example: "25500.000000"
+                source:
+                  type: string
+                  example: MANUAL_ADMIN
+                rateDate:
+                  type: string
+                  format: date
+      responses:
+        "200":
+          description: Fx rate updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /ai/knowledge/documents:
+    get:
+      operationId: listAiKnowledgeDocuments
+      tags: [ai]
+      summary: Danh sách tài liệu tri thức AI (FINANCE_ADMIN)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Knowledge document list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      operationId: uploadAiKnowledgeDocument
+      tags: [ai]
+      summary: Upload tài liệu tri thức AI (.txt/.docx) (FINANCE_ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        "201":
+          description: Knowledge document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /ai/knowledge/documents/{id}:
+    delete:
+      operationId: archiveAiKnowledgeDocument
+      tags: [ai]
+      summary: Archive tài liệu tri thức AI (FINANCE_ADMIN)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/correlationId"
+      responses:
+        "200":
+          description: Knowledge document archived
           content:
             application/json:
               schema:

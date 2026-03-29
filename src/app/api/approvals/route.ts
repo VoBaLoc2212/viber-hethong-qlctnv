@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["FINANCE_ADMIN"]);
     const result = await bootstrapApprovalRequests(auth, correlationId);
     return ok(result, {});
   } catch (error) {

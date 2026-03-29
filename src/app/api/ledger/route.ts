@@ -1,11 +1,12 @@
 import type { NextRequest } from "next/server";
 
 import { listLedgerEntries } from "@/modules/ledger";
-import { handleApiError, ok, requireAuth } from "@/modules/shared";
+import { handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["FINANCE_ADMIN", "ACCOUNTANT", "AUDITOR"]);
     const { searchParams } = new URL(request.url);
 
     const result = await listLedgerEntries(auth, {

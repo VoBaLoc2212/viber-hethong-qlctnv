@@ -2,13 +2,15 @@
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Receipt,
   PieChart,
   BarChart3,
-  Shield,
+  ShieldCheck,
+  Users,
+  WalletCards,
   Bot,
   Bell,
   Search,
@@ -16,6 +18,7 @@ import {
   Sun,
   Moon,
   Menu,
+  Coins,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -37,23 +40,36 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NAV_ITEMS } from "@/lib/auth/rbac";
+import { useGetDashboardKpis, useGetTransactions } from "@/lib/api-client";
+import { getRoleLabel, getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const ICONS: Record<(typeof NAV_ITEMS)[number]["icon"], LucideIcon> = {
   dashboard: LayoutDashboard,
   transactions: Receipt,
+  budgeting: WalletCards,
   budgets: PieChart,
   reports: BarChart3,
-  security: Shield,
+  security: ShieldCheck,
+  users: Users,
   assistant: Bot,
+  fxRates: Coins,
 };
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const { currentUser, logout, initializing } = useAuthSession();
   const [mounted, setMounted] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [searchKeyword, setSearchKeyword] = useState("");
+
+  const { data: dashboardKpis } = useGetDashboardKpis({ enabled: Boolean(currentUser) });
+  const { data: recentTransactions } = useGetTransactions({ limit: 5, page: 1 }, { enabled: Boolean(currentUser) });
+
+  const unreadCount = (dashboardKpis?.pendingCount ?? 0) + (recentTransactions?.data.length ?? 0);
 
   useEffect(() => {
     setMounted(true);
@@ -75,6 +91,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
     } finally {
       setLoggingOut(false);
     }
+  }
+
+  function handleHeaderSearch(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const keyword = searchKeyword.trim();
+    const params = new URLSearchParams();
+    if (keyword) params.set("q", keyword);
+
+    const query = params.toString();
+    router.push(query ? `/transactions?${query}` : "/transactions");
   }
 
   if (isAuthPage) {
@@ -115,7 +142,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-6">
-          <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Menu</div>
+          <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Điều hướng</div>
           {visibleNavItems.map((item) => {
             const Icon = ICONS[item.icon];
             const isActive = pathname === item.href;
@@ -141,10 +168,10 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
         <div className="border-t border-border/50 p-4">
           <div className="rounded-xl bg-secondary/50 p-4">
-            <h4 className="mb-1 text-sm font-semibold">Need help?</h4>
-            <p className="mb-3 text-xs text-muted-foreground">Check our documentation or contact support.</p>
-            <Button variant="outline" className="w-full text-xs" size="sm">
-              Documentation
+            <h4 className="mb-1 text-sm font-semibold">Cần hỗ trợ?</h4>
+            <p className="mb-3 text-xs text-muted-foreground">Xem tài liệu hoặc liên hệ bộ phận hỗ trợ.</p>
+            <Button asChild variant="outline" className="w-full text-xs" size="sm">
+              <Link href="/help">Tài liệu</Link>
             </Button>
           </div>
         </div>
@@ -155,7 +182,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex w-full items-center gap-2 sm:gap-4">
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full md:hidden" aria-label="Open navigation menu">
+                <Button variant="ghost" size="icon" className="rounded-full md:hidden" aria-label="Mở menu điều hướng">
                   <Menu className="h-5 w-5 text-muted-foreground" />
                 </Button>
               </SheetTrigger>
@@ -172,7 +199,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   </Link>
                 </div>
                 <nav className="space-y-1.5 px-3 py-6">
-                  <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Menu</div>
+                  <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Điều hướng</div>
                   {visibleNavItems.map((item) => {
                     const Icon = ICONS[item.icon];
                     const isActive = pathname === item.href;
@@ -197,20 +224,58 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </nav>
               </SheetContent>
             </Sheet>
-            <div className="relative hidden w-full max-w-sm sm:block">
+            <form className="relative hidden w-full max-w-sm sm:block" onSubmit={handleHeaderSearch}>
               <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search transactions..."
+                value={searchKeyword}
+                onChange={(event) => setSearchKeyword(event.target.value)}
+                placeholder="Tìm kiếm giao dịch..."
                 className="h-9 rounded-full border-transparent bg-secondary/50 pl-9 transition-colors focus-visible:bg-background"
               />
-            </div>
+            </form>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
-            <Button variant="ghost" size="icon" className="relative rounded-full">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-card bg-destructive" />
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative rounded-full" aria-label="Thông báo">
+                  <Bell className="h-5 w-5 text-muted-foreground" />
+                  {unreadCount > 0 ? (
+                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-card bg-destructive" />
+                  ) : null}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80 space-y-3">
+                <div>
+                  <p className="text-sm font-semibold">Thông báo</p>
+                  <p className="text-xs text-muted-foreground">Hiện có {dashboardKpis?.pendingCount ?? 0} giao dịch chờ phê duyệt.</p>
+                </div>
+
+                <div className="space-y-2">
+                  {recentTransactions?.data.length ? (
+                    recentTransactions.data.map((tx) => (
+                      <div key={tx.id} className="rounded-md border border-border/60 p-2 text-xs">
+                        <p className="font-medium">{tx.transactionCode}</p>
+                        <p className="text-muted-foreground">
+                          {getTransactionTypeLabel(tx.type)} · {getTransactionStatusLabel(tx.status)}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Chưa có giao dịch gần đây.</p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/dashboard">Xem tổng quan</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/transactions">Xem giao dịch</Link>
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button
               variant="ghost"
               size="icon"
@@ -237,12 +302,12 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <Avatar className="h-8 w-8 border border-border/50">
                 <AvatarImage src="" />
                 <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
-                  {currentUser?.fullName?.slice(0, 2).toUpperCase() ?? "NA"}
+                  {currentUser?.fullName?.slice(0, 2).toUpperCase() ?? "--"}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden text-left sm:block">
-                <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "N/A"}</p>
-                <p className="text-xs text-muted-foreground">{currentUser?.role ?? "N/A"}</p>
+                <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "Chưa có"}</p>
+                <p className="text-xs text-muted-foreground">{getRoleLabel(currentUser?.role) ?? "Chưa có"}</p>
               </div>
             </button>
           </div>

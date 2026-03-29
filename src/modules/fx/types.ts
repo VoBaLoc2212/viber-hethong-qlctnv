@@ -7,6 +7,9 @@ export type FxRate = {
   rate: string;
   rateDate: string;
   source: string;
+  fetchedAt: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type ConvertedAmount = {
@@ -16,4 +19,6 @@ export type ConvertedAmount = {
   convertedCurrency: "VND";
   rate: string;
   rateDate: string;
+  source: string;
+  fetchedAt: string;
 };

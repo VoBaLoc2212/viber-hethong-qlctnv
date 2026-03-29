@@ -42,8 +42,9 @@ export async function GET(request: NextRequest) {
         totalIncome,
         transactionCount,
         pendingCount,
+        currency: "VND" as const,
       },
-      {},
+      { currency: "VND" },
     );
   } catch (error) {
     return handleApiError(request, error);

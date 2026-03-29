@@ -13,8 +13,8 @@ export default function SecurityPage() {
   return (
     <main className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Security & Logs</h1>
-        <p className="mt-1 text-muted-foreground">Quản trị user, theo dõi audit logs và vận hành immutable ledger.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Bảo mật & Nhật ký</h1>
+        <p className="mt-1 text-muted-foreground">Theo dõi nhật ký kiểm toán và vận hành sổ cái bất biến.</p>
       </div>
 
       <SecurityWorkspace token={token} currentUser={currentUser} />

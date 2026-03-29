@@ -1,0 +1,28 @@
+[MỨC ĐỘ: INTERNAL-CONFIDENTIAL - MOCK]
+TÀI LIỆU GIẢ LẬP - KHÔNG PHẢI THÔNG TIN MẬT THẬT
+
+Mục tiêu: tạo bộ dữ liệu thử nghiệm cho Knowledge Base AI.
+
+Danh mục thông tin nhạy cảm mô phỏng
+1) Mã dự án nội bộ (giả lập)
+- PRJ-ALPHA-2026
+- PRJ-BETA-2026
+
+2) Chính sách phân quyền truy cập (mock)
+- EMPLOYEE: chỉ đọc dữ liệu cá nhân.
+- MANAGER: đọc dữ liệu phòng ban phụ trách.
+- ACCOUNTANT: duyệt chứng từ và báo cáo tài chính.
+- FINANCE_ADMIN: toàn quyền cấu hình tài chính.
+- AUDITOR: quyền xem log, báo cáo kiểm toán.
+
+3) Quy tắc redaction khi AI trả lời
+- Không trả về số tài khoản thật.
+- Không trả về thông tin định danh cá nhân nhạy cảm.
+- Nếu truy vấn vượt quyền, trả thông báo FORBIDDEN.
+
+4) Checklist kiểm toán bảo mật (mock)
+- Bật audit logging cho endpoint tài chính trọng yếu.
+- Bật correlation-id trên tất cả request.
+- Lưu dấu vết thao tác xóa/sửa dữ liệu.
+
+Lưu ý: File này chỉ là mock phục vụ kiểm thử tính năng upload/search tài liệu nội bộ.

@@ -2,33 +2,22 @@
 
 import { useState } from "react";
 
-import {
-  apiCreateReversal,
-  apiDeleteUser,
-  apiListLedger,
-  apiListLogs,
-  apiListUsers,
-  apiRegisterUser,
-  apiUpdateUser,
-} from "@/lib/api";
+import { apiCreateReversal, apiListLedger, apiListLogs } from "@/lib/api";
 import type { AuditLogItem, AuthUser, LedgerEntryItem } from "@/lib/api";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getLedgerEntryTypeLabel, getRoleLabel } from "@/lib/ui-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SecurityWorkspaceProps = {
   token: string | null;
   currentUser: AuthUser | null;
 };
-
-type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 function generateIdempotencyKey(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -39,30 +28,16 @@ function generateIdempotencyKey(prefix: string): string {
 }
 
 export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps) {
-  const [users, setUsers] = useState<AuthUser[]>([]);
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [registerForm, setRegisterForm] = useState({
-    username: "",
-    password: "",
-    fullName: "",
-    email: "",
-    role: "EMPLOYEE" as UserRole,
-  });
+  const role = currentUser?.role;
+  const canViewLogs = role === "FINANCE_ADMIN" || role === "AUDITOR";
+  const canViewLedger = role === "FINANCE_ADMIN" || role === "ACCOUNTANT" || role === "AUDITOR";
+  const canCreateReversal = role === "FINANCE_ADMIN" || role === "ACCOUNTANT";
 
-  const [updateForm, setUpdateForm] = useState({
-    id: "",
-    username: "",
-    fullName: "",
-    email: "",
-    role: "EMPLOYEE" as UserRole,
-    isActive: true,
-  });
-
-  const [deleteUserId, setDeleteUserId] = useState("");
   const [logFilter, setLogFilter] = useState({
     entityType: "",
     entityId: "",
@@ -84,99 +59,52 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
     setLoading(true);
     setError(null);
 
-    try {
-      const [usersPayload, logsPayload, ledgerPayload] = await Promise.all([
-        apiListUsers(token),
-        apiListLogs(token),
-        apiListLedger(token),
-      ]);
+    const errors: string[] = [];
 
-      setUsers(usersPayload.users);
-      setLogs(logsPayload.logs);
-      setLedgerEntries(ledgerPayload.entries);
-    } catch (unknownError) {
-      const message =
-        typeof unknownError === "object" && unknownError && "message" in unknownError
-          ? String((unknownError as { message: unknown }).message)
-          : "Không tải được dữ liệu security";
-      setError(message);
+    try {
+      if (canViewLogs) {
+        try {
+          const logsPayload = await apiListLogs(token);
+          setLogs(logsPayload.logs);
+        } catch (unknownError) {
+          const message =
+            typeof unknownError === "object" && unknownError && "message" in unknownError
+              ? String((unknownError as { message: unknown }).message)
+              : "Không tải được nhật ký kiểm toán";
+          errors.push(message);
+          setLogs([]);
+        }
+      } else {
+        setLogs([]);
+      }
+
+      if (canViewLedger) {
+        try {
+          const ledgerPayload = await apiListLedger(token);
+          setLedgerEntries(ledgerPayload.entries);
+        } catch (unknownError) {
+          const message =
+            typeof unknownError === "object" && unknownError && "message" in unknownError
+              ? String((unknownError as { message: unknown }).message)
+              : "Không tải được sổ cái";
+          errors.push(message);
+          setLedgerEntries([]);
+        }
+      } else {
+        setLedgerEntries([]);
+      }
+
+      if (errors.length > 0) {
+        setError(errors.join(" • "));
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleRegisterUser(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token) return;
-
-    setError(null);
-
-    try {
-      await apiRegisterUser(token, registerForm);
-      setRegisterForm({
-        username: "",
-        password: "",
-        fullName: "",
-        email: "",
-        role: "EMPLOYEE",
-      });
-      await reloadAllData();
-    } catch (unknownError) {
-      const message =
-        typeof unknownError === "object" && unknownError && "message" in unknownError
-          ? String((unknownError as { message: unknown }).message)
-          : "Đăng ký user thất bại";
-      setError(message);
-    }
-  }
-
-  async function handleUpdateUser(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !updateForm.id) return;
-
-    setError(null);
-
-    try {
-      await apiUpdateUser(token, updateForm.id, {
-        username: updateForm.username || undefined,
-        fullName: updateForm.fullName || undefined,
-        email: updateForm.email || undefined,
-        role: updateForm.role,
-        isActive: updateForm.isActive,
-      });
-
-      await reloadAllData();
-    } catch (unknownError) {
-      const message =
-        typeof unknownError === "object" && unknownError && "message" in unknownError
-          ? String((unknownError as { message: unknown }).message)
-          : "Cập nhật user thất bại";
-      setError(message);
-    }
-  }
-
-  async function handleDeleteUser(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !deleteUserId) return;
-
-    setError(null);
-
-    try {
-      await apiDeleteUser(token, deleteUserId);
-      setDeleteUserId("");
-      await reloadAllData();
-    } catch (unknownError) {
-      const message =
-        typeof unknownError === "object" && unknownError && "message" in unknownError
-          ? String((unknownError as { message: unknown }).message)
-          : "Xóa user thất bại";
-      setError(message);
-    }
-  }
-
   async function handleFilterLogs(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!token) return;
+    if (!token || !canViewLogs) return;
 
     setError(null);
 
@@ -194,14 +122,14 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
           ? String((unknownError as { message: unknown }).message)
-          : "Lọc logs thất bại";
+          : "Lọc nhật ký thất bại";
       setError(message);
     }
   }
 
   async function handleFilterLedger(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!token) return;
+    if (!token || !canViewLedger) return;
 
     setError(null);
 
@@ -216,14 +144,14 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
           ? String((unknownError as { message: unknown }).message)
-          : "Lọc ledger thất bại";
+          : "Lọc sổ cái thất bại";
       setError(message);
     }
   }
 
   async function handleCreateReversal(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!token || !ledgerFilter.reversalTargetId || !ledgerFilter.reversalReason) return;
+    if (!token || !canCreateReversal || !ledgerFilter.reversalTargetId || !ledgerFilter.reversalReason) return;
 
     setError(null);
 
@@ -241,7 +169,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
           ? String((unknownError as { message: unknown }).message)
-          : "Tạo reversal thất bại";
+          : "Tạo bút toán đảo thất bại";
       setError(message);
     }
   }
@@ -250,34 +178,26 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
     <section className="space-y-6">
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle>Security & Logs</CardTitle>
-          <CardDescription>Quản trị người dùng, audit logs và immutable ledger.</CardDescription>
+          <CardTitle>Tổng quan bảo mật</CardTitle>
+          <CardDescription>Theo dõi nhật ký kiểm toán và sổ cái bất biến.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">Current role:</span>
-            <Badge variant="outline">{currentUser?.role ?? "N/A"}</Badge>
+            <span className="text-sm text-muted-foreground">Vai trò hiện tại:</span>
+            <Badge variant="outline">{getRoleLabel(currentUser?.role)}</Badge>
           </div>
 
           {!token ? (
             <Alert>
-              <AlertDescription>Vui lòng đăng nhập để sử dụng module security.</AlertDescription>
+              <AlertDescription>Vui lòng đăng nhập để sử dụng mô-đun bảo mật.</AlertDescription>
             </Alert>
           ) : null}
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={reloadAllData} disabled={!token || loading}>
-              {loading ? "Đang tải..." : "Tải dữ liệu security"}
+              {loading ? "Đang tải..." : "Tải dữ liệu bảo mật"}
             </Button>
           </div>
-
-          {token && currentUser?.role !== "FINANCE_ADMIN" ? (
-            <Alert>
-              <AlertDescription>
-                Lưu ý: chỉ FINANCE_ADMIN có toàn quyền quản trị user; các thao tác khác phụ thuộc role.
-              </AlertDescription>
-            </Alert>
-          ) : null}
 
           {error ? (
             <Alert variant="destructive">
@@ -287,209 +207,15 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Register User</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleRegisterUser}>
-              <div className="space-y-2">
-                <Label htmlFor="register-username">Username</Label>
-                <Input
-                  id="register-username"
-                  value={registerForm.username}
-                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, username: event.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="register-password">Password</Label>
-                <Input
-                  id="register-password"
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, password: event.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="register-full-name">Full Name</Label>
-                <Input
-                  id="register-full-name"
-                  value={registerForm.fullName}
-                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, fullName: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="register-email">Email</Label>
-                <Input
-                  id="register-email"
-                  type="email"
-                  value={registerForm.email}
-                  onChange={(event) => setRegisterForm((prev) => ({ ...prev, email: event.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="register-role">Role</Label>
-                <Select
-                  value={registerForm.role}
-                  onValueChange={(value) =>
-                    setRegisterForm((prev) => ({
-                      ...prev,
-                      role: value as UserRole,
-                    }))
-                  }
-                >
-                  <SelectTrigger id="register-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="EMPLOYEE">EMPLOYEE</SelectItem>
-                    <SelectItem value="MANAGER">MANAGER</SelectItem>
-                    <SelectItem value="ACCOUNTANT">ACCOUNTANT</SelectItem>
-                    <SelectItem value="FINANCE_ADMIN">FINANCE_ADMIN</SelectItem>
-                    <SelectItem value="AUDITOR">AUDITOR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button type="submit" disabled={!token || currentUser?.role !== "FINANCE_ADMIN"}>
-                Tạo user
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Update User</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleUpdateUser}>
-              <div className="space-y-2">
-                <Label htmlFor="update-id">User ID</Label>
-                <Input
-                  id="update-id"
-                  value={updateForm.id}
-                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, id: event.target.value }))}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="update-username">Username</Label>
-                <Input
-                  id="update-username"
-                  value={updateForm.username}
-                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, username: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="update-full-name">Full Name</Label>
-                <Input
-                  id="update-full-name"
-                  value={updateForm.fullName}
-                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, fullName: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="update-email">Email</Label>
-                <Input
-                  id="update-email"
-                  value={updateForm.email}
-                  onChange={(event) => setUpdateForm((prev) => ({ ...prev, email: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="update-role">Role</Label>
-                <Select
-                  value={updateForm.role}
-                  onValueChange={(value) =>
-                    setUpdateForm((prev) => ({
-                      ...prev,
-                      role: value as UserRole,
-                    }))
-                  }
-                >
-                  <SelectTrigger id="update-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="EMPLOYEE">EMPLOYEE</SelectItem>
-                    <SelectItem value="MANAGER">MANAGER</SelectItem>
-                    <SelectItem value="ACCOUNTANT">ACCOUNTANT</SelectItem>
-                    <SelectItem value="FINANCE_ADMIN">FINANCE_ADMIN</SelectItem>
-                    <SelectItem value="AUDITOR">AUDITOR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <Checkbox
-                  id="update-active"
-                  checked={updateForm.isActive}
-                  onCheckedChange={(checked) =>
-                    setUpdateForm((prev) => ({
-                      ...prev,
-                      isActive: checked === true,
-                    }))
-                  }
-                />
-                <Label htmlFor="update-active">Active</Label>
-              </div>
-
-              <Button
-                type="submit"
-                disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && updateForm.id !== currentUser?.id)}
-              >
-                Cập nhật user
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Delete User</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleDeleteUser}>
-              <div className="space-y-2">
-                <Label htmlFor="delete-user-id">User ID</Label>
-                <Input
-                  id="delete-user-id"
-                  value={deleteUserId}
-                  onChange={(event) => setDeleteUserId(event.target.value)}
-                  required
-                />
-              </div>
-
-              <Button type="submit" variant="destructive" disabled={!token || currentUser?.role !== "FINANCE_ADMIN"}>
-                Xóa user
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className="border-border/50 shadow-sm">
           <CardHeader>
-            <CardTitle>Audit Logs</CardTitle>
+            <CardTitle>Nhật ký kiểm toán</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleFilterLogs}>
               <div className="space-y-2">
-                <Label htmlFor="log-entity-type">Entity Type</Label>
+                <Label htmlFor="log-entity-type">Loại đối tượng</Label>
                 <Input
                   id="log-entity-type"
                   value={logFilter.entityType}
@@ -498,7 +224,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="log-entity-id">Entity ID</Label>
+                <Label htmlFor="log-entity-id">ID đối tượng</Label>
                 <Input
                   id="log-entity-id"
                   value={logFilter.entityId}
@@ -507,7 +233,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="log-user-id">User ID</Label>
+                <Label htmlFor="log-user-id">ID người dùng</Label>
                 <Input
                   id="log-user-id"
                   value={logFilter.userId}
@@ -516,7 +242,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="log-from-date">From Date (ISO)</Label>
+                <Label htmlFor="log-from-date">Từ ngày (ISO)</Label>
                 <Input
                   id="log-from-date"
                   value={logFilter.fromDate}
@@ -525,7 +251,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="log-to-date">To Date (ISO)</Label>
+                <Label htmlFor="log-to-date">Đến ngày (ISO)</Label>
                 <Input
                   id="log-to-date"
                   value={logFilter.toDate}
@@ -533,11 +259,8 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                 />
               </div>
 
-              <Button
-                type="submit"
-                disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && currentUser?.role !== "AUDITOR")}
-              >
-                Lọc logs
+              <Button type="submit" disabled={!token || !canViewLogs}>
+                Lọc nhật ký
               </Button>
             </form>
           </CardContent>
@@ -545,12 +268,12 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
 
         <Card className="border-border/50 shadow-sm">
           <CardHeader>
-            <CardTitle>Ledger Filter</CardTitle>
+            <CardTitle>Bộ lọc sổ cái</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleFilterLedger}>
               <div className="space-y-2">
-                <Label htmlFor="ledger-reference-type">Reference Type</Label>
+                <Label htmlFor="ledger-reference-type">Loại tham chiếu</Label>
                 <Input
                   id="ledger-reference-type"
                   value={ledgerFilter.referenceType}
@@ -559,7 +282,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="ledger-reference-id">Reference ID</Label>
+                <Label htmlFor="ledger-reference-id">ID tham chiếu</Label>
                 <Input
                   id="ledger-reference-id"
                   value={ledgerFilter.referenceId}
@@ -567,124 +290,119 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                 />
               </div>
 
-              <Button
-                type="submit"
-                disabled={
-                  !token ||
-                  (currentUser?.role !== "FINANCE_ADMIN" &&
-                    currentUser?.role !== "ACCOUNTANT" &&
-                    currentUser?.role !== "AUDITOR")
-                }
-              >
-                Lọc ledger
+              <Button type="submit" disabled={!token || !canViewLedger}>
+                Lọc sổ cái
               </Button>
             </form>
           </CardContent>
         </Card>
       </div>
 
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader>
-          <CardTitle>Audit Logs Result</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Time</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>Result</TableHead>
-                <TableHead>Actor</TableHead>
-                <TableHead>Correlation</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>{log.createdAt}</TableCell>
-                  <TableCell>{log.action}</TableCell>
-                  <TableCell>
-                    {log.entityType}:{log.entityId}
-                  </TableCell>
-                  <TableCell>{log.result}</TableCell>
-                  <TableCell>{log.actor.username}</TableCell>
-                  <TableCell>{log.correlationId ?? "-"}</TableCell>
+      {canViewLogs ? (
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Kết quả nhật ký kiểm toán</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Thời gian</TableHead>
+                  <TableHead>Hành động</TableHead>
+                  <TableHead>Đối tượng</TableHead>
+                  <TableHead>Kết quả</TableHead>
+                  <TableHead>Người thực hiện</TableHead>
+                  <TableHead>Mã tương quan</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell>{log.createdAt}</TableCell>
+                    <TableCell>{log.action}</TableCell>
+                    <TableCell>
+                      {log.entityType}:{log.entityId}
+                    </TableCell>
+                    <TableCell>{log.result}</TableCell>
+                    <TableCell>{log.actor.username}</TableCell>
+                    <TableCell>{log.correlationId ?? "-"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
 
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader>
-          <CardTitle>Ledger (immutable) & Reversal</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateReversal}>
-            <div className="space-y-2">
-              <Label htmlFor="reversal-target-id">Target Ledger Entry ID</Label>
-              <Input
-                id="reversal-target-id"
-                value={ledgerFilter.reversalTargetId}
-                onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalTargetId: event.target.value }))}
-                required
-              />
-            </div>
+      {canViewLedger ? (
+        <Card className="border-border/50 shadow-sm">
+          <CardHeader>
+            <CardTitle>Sổ cái (bất biến) & bút toán đảo</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {canCreateReversal ? (
+              <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateReversal}>
+                <div className="space-y-2">
+                  <Label htmlFor="reversal-target-id">ID bút toán sổ cái cần đảo</Label>
+                  <Input
+                    id="reversal-target-id"
+                    value={ledgerFilter.reversalTargetId}
+                    onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalTargetId: event.target.value }))}
+                    required
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="reversal-reason">Reversal Reason</Label>
-              <Input
-                id="reversal-reason"
-                value={ledgerFilter.reversalReason}
-                onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalReason: event.target.value }))}
-                required
-              />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="reversal-reason">Lý do đảo bút toán</Label>
+                  <Input
+                    id="reversal-reason"
+                    value={ledgerFilter.reversalReason}
+                    onChange={(event) => setLedgerFilter((prev) => ({ ...prev, reversalReason: event.target.value }))}
+                    required
+                  />
+                </div>
 
-            <div className="md:col-span-2">
-              <Button
-                type="submit"
-                disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && currentUser?.role !== "ACCOUNTANT")}
-              >
-                Tạo reversal
-              </Button>
-            </div>
-          </form>
+                <div className="md:col-span-2">
+                  <Button type="submit" disabled={!token || !canCreateReversal}>
+                    Tạo bút toán đảo
+                  </Button>
+                </div>
+              </form>
+            ) : null}
 
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Entry Code</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Reference</TableHead>
-                <TableHead>Reversal Of</TableHead>
-                <TableHead>Created By</TableHead>
-                <TableHead>Created At</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ledgerEntries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell>{entry.entryCode}</TableCell>
-                  <TableCell>{entry.type}</TableCell>
-                  <TableCell>
-                    {entry.amount} {entry.currency}
-                  </TableCell>
-                  <TableCell>
-                    {entry.referenceType}:{entry.referenceId}
-                  </TableCell>
-                  <TableCell>{entry.reversalOfEntryCode ?? entry.reversalOfId ?? "-"}</TableCell>
-                  <TableCell>{entry.createdBy.username}</TableCell>
-                  <TableCell>{entry.createdAt}</TableCell>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mã bút toán</TableHead>
+                  <TableHead>Loại</TableHead>
+                  <TableHead>Số tiền</TableHead>
+                  <TableHead>Tham chiếu</TableHead>
+                  <TableHead>Đảo của</TableHead>
+                  <TableHead>Người tạo</TableHead>
+                  <TableHead>Thời điểm tạo</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {ledgerEntries.map((entry) => (
+                  <TableRow key={entry.id}>
+                    <TableCell>{entry.entryCode}</TableCell>
+                    <TableCell>{getLedgerEntryTypeLabel(entry.type)}</TableCell>
+                    <TableCell>
+                      {entry.amount} {entry.currency}
+                    </TableCell>
+                    <TableCell>
+                      {entry.referenceType}:{entry.referenceId}
+                    </TableCell>
+                    <TableCell>{entry.reversalOfEntryCode ?? entry.reversalOfId ?? "-"}</TableCell>
+                    <TableCell>{entry.createdBy.username}</TableCell>
+                    <TableCell>{entry.createdAt}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
     </section>
   );
 }

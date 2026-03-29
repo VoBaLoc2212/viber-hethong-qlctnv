@@ -13,8 +13,8 @@ export default function ReportsPage() {
   return (
     <main className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-        <p className="mt-1 text-muted-foreground">Tổng hợp tài chính, xu hướng giao dịch và theo dõi KPI vận hành.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Báo cáo</h1>
+        <p className="mt-1 text-muted-foreground">Tổng hợp tài chính, xu hướng giao dịch và theo dõi chỉ số vận hành.</p>
       </div>
 
       <ReportsWorkspace token={token} currentUser={currentUser} />

@@ -23,3 +23,27 @@ export type ForecastPoint = {
   projectedOutflow: number;
   projectedInflow: number;
 };
+
+export type ReportsOverview = {
+  kpis: {
+    totalBudget: number;
+    totalSpent: number;
+    totalIncome: number;
+    remainingBalance: number;
+    transactionCount: number;
+    pendingCount: number;
+  };
+  monthlySeries: Array<{ month: string; income: number; expenses: number }>;
+  recentTransactions: Array<{
+    id: string;
+    code: string;
+    type: "INCOME" | "EXPENSE";
+    amount: string;
+    date: string;
+    status: string;
+    description?: string | null;
+  }>;
+  expenseComposition: PieSeriesPoint[];
+  budgetVsActual: BudgetVsActualPoint[];
+  cashflowForecastNextMonth: ForecastPoint[];
+};

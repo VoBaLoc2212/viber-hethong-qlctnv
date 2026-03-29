@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { Prisma, type TransactionStatus, type TransactionType } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
+import { convertUsdToVndByDate } from "@/modules/fx";
 import {
   addMoney,
   calculateAvailable,
@@ -216,12 +217,7 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
     throw new AppError("type is required", "INVALID_INPUT");
   }
 
-  if (!payload.amount || compareMoney(payload.amount, "0.00") <= 0) {
-    throw new AppError("amount must be greater than 0", "INVALID_INPUT");
-  }
-
   const txType = payload.type;
-  const txAmount = payload.amount;
 
   const status = payload.status ?? (txType === "EXPENSE" ? "PENDING" : "APPROVED");
 
@@ -237,9 +233,36 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
     throw new AppError("date is invalid", "INVALID_INPUT");
   }
 
-  const fxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
+  let txAmount = payload.amount;
+  let fxCurrency = payload.fxCurrency?.trim().toUpperCase() ?? null;
+  let fxAmount = payload.fxAmount ?? null;
+
+  if (!txAmount && !(fxCurrency === "USD" && fxAmount)) {
+    throw new AppError("amount is required", "INVALID_INPUT");
+  }
+  let fxRate = payload.fxRate ?? null;
+  let baseCurrency = payload.baseCurrency ?? null;
+  let baseAmount = payload.baseAmount ?? null;
+  let fxRateProvider = payload.fxRateProvider ?? null;
+  let fxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
   if (payload.fxRateFetchedAt && (!fxRateFetchedAt || Number.isNaN(fxRateFetchedAt.getTime()))) {
     throw new AppError("fxRateFetchedAt is invalid", "INVALID_INPUT");
+  }
+
+  const shouldAutoConvertUsd = fxCurrency === "USD" && Boolean(fxAmount);
+
+  if (shouldAutoConvertUsd) {
+    const converted = await prisma.$transaction((db) => convertUsdToVndByDate(db, fxAmount as string, txDate));
+    txAmount = converted.convertedAmount;
+    fxRate = converted.rate;
+    baseCurrency = converted.convertedCurrency;
+    baseAmount = converted.convertedAmount;
+    fxRateProvider = converted.source;
+    fxRateFetchedAt = new Date(converted.fetchedAt);
+  }
+
+  if (!txAmount || compareMoney(txAmount, "0.00") <= 0) {
+    throw new AppError("amount must be greater than 0", "INVALID_INPUT");
   }
 
   if (payload.splits && payload.splits.length > 0) {
@@ -292,12 +315,12 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           date: txDate,
           description: payload.description ?? null,
           recurringSourceId: payload.recurringSourceId ?? null,
-          fxCurrency: payload.fxCurrency ?? null,
-          fxAmount: payload.fxAmount ?? null,
-          fxRate: payload.fxRate ?? null,
-          baseCurrency: payload.baseCurrency ?? null,
-          baseAmount: payload.baseAmount ?? null,
-          fxRateProvider: payload.fxRateProvider ?? null,
+          fxCurrency,
+          fxAmount,
+          fxRate,
+          baseCurrency,
+          baseAmount,
+          fxRateProvider,
           fxRateFetchedAt,
           budgetId: budget.id,
           departmentId: payload.departmentId ?? budget.departmentId,
@@ -385,12 +408,12 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         date: txDate,
         description: payload.description ?? null,
         recurringSourceId: payload.recurringSourceId ?? null,
-        fxCurrency: payload.fxCurrency ?? null,
-        fxAmount: payload.fxAmount ?? null,
-        fxRate: payload.fxRate ?? null,
-        baseCurrency: payload.baseCurrency ?? null,
-        baseAmount: payload.baseAmount ?? null,
-        fxRateProvider: payload.fxRateProvider ?? null,
+        fxCurrency,
+        fxAmount,
+        fxRate,
+        baseCurrency,
+        baseAmount,
+        fxRateProvider,
         fxRateFetchedAt,
         budgetId: payload.budgetId ?? null,
         departmentId: payload.departmentId ?? null,

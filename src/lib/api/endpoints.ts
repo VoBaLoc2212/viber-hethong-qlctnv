@@ -233,7 +233,9 @@ export async function apiCreateTransaction(
   token: string,
   payload: {
     type: "INCOME" | "EXPENSE";
-    amount: string;
+    amount?: string;
+    fxCurrency?: "USD" | null;
+    fxAmount?: string | null;
     budgetId?: string | null;
     departmentId?: string | null;
     date?: string;

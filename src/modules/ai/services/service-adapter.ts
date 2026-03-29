@@ -10,7 +10,8 @@ import { AppError } from "@/modules/shared/errors/app-error";
 import type { AiIntent, AiResolution } from "../types";
 
 const REPORT_ROLES = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] as const;
-const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký/i;
+const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký|tổng thu|tổng chi|tổng ngân sách|số dư|doanh số|thu hiện tại|chi hiện tại/i;
+const KPI_SUMMARY_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại/i;
 
 function canUseReport(auth: AuthContext) {
   return REPORT_ROLES.includes(auth.role as (typeof REPORT_ROLES)[number]);
@@ -118,6 +119,32 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
       citations: [{ source: "report-service", snippet: "cashflowForecastNextMonth" }],
       relatedData: { forecast },
       suggestedActions: ["Xem chi tiết theo từng tuần", "Chủ động điều chỉnh hạn mức ngân sách"],
+    };
+  }
+
+  if ((KPI_SUMMARY_PATTERN.test(message) || /tổng\s*chi|tổng\s*thu|total\s*expense|total\s*income/i.test(message) || ((intent === "QUERY" || intent === "ANALYSIS") && /thu.*chi|chi.*thu/i.test(message))) && canUseReport(auth)) {
+    const overview = await tryService(() => getReportsOverview(auth, {}));
+    if (!overview) return null;
+
+    const wantsBudget = /tổng ngân sách|ngân sách hiện tại|budget/i.test(message);
+    const wantsRemaining = /số dư|còn lại|remaining|balance/i.test(message);
+
+    const answer = wantsBudget || wantsRemaining
+      ? `Tổng ngân sách hiện tại: ${overview.kpis.totalBudget.toLocaleString("vi-VN")} VND; tổng chi hiện tại: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND; tổng thu hiện tại: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND; số dư còn lại: ${overview.kpis.remainingBalance.toLocaleString("vi-VN")} VND.`
+      : `Tổng chi hiện tại: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND; tổng thu hiện tại: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND.`;
+
+    return {
+      intent,
+      routeUsed: "SERVICE",
+      rawAnswer: answer,
+      citations: [{ source: "report-service", snippet: "overview.kpis totalBudget + totalSpent + totalIncome + remainingBalance" }],
+      relatedData: {
+        totalBudget: overview.kpis.totalBudget,
+        totalSpent: overview.kpis.totalSpent,
+        totalIncome: overview.kpis.totalIncome,
+        remainingBalance: overview.kpis.remainingBalance,
+      },
+      suggestedActions: ["Xem thêm theo từng tháng", "Lọc theo phòng ban để đối chiếu"],
     };
   }
 

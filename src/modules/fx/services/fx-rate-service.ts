@@ -125,12 +125,16 @@ export async function listFxRates(auth: AuthContext, filter: FxRateFilter) {
 
   const keyword = filter.q?.trim();
 
+  const normalizedSource = filter.source?.trim().toUpperCase();
+
   const where: Prisma.FxRateWhereInput = {
     fromCurrency: "USD",
     toCurrency: "VND",
     ...(filter.fromCurrency ? { fromCurrency: filter.fromCurrency.trim().toUpperCase() } : {}),
     ...(filter.toCurrency ? { toCurrency: filter.toCurrency.trim().toUpperCase() } : {}),
-    ...(filter.source ? { source: { contains: filter.source.trim().toUpperCase(), mode: "insensitive" } } : {}),
+    ...(normalizedSource
+      ? { source: { contains: normalizedSource, mode: "insensitive" } }
+      : { source: { startsWith: "WEB_", mode: "insensitive" } }),
     ...(filter.rateDateFrom || filter.rateDateTo
       ? {
           rateDate: {

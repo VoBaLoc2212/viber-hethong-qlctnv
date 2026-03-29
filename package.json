@@ -6,7 +6,7 @@
     "dev": "next dev src --port 3001",
     "build": "npm run typecheck && next build src",
     "start": "npm run prisma:generate && next start src --port 3001",
-    "typecheck": "tsc -p src/tsconfig.json --noEmit",
+    "typecheck": "npm run prisma:generate && tsc -p src/tsconfig.json --noEmit",
     "prisma:generate": "prisma generate --schema src/lib/db/prisma/schema.prisma",
     "prisma:validate": "prisma validate --schema src/lib/db/prisma/schema.prisma",
     "prisma:migrate:dev": "prisma migrate dev --schema src/lib/db/prisma/schema.prisma",

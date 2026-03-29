@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
-import { useSearchParams } from "next/navigation";
 
 import {
   apiCreateRecurringTemplate,
@@ -149,7 +148,6 @@ function makeIdempotencyKey(prefix: string) {
 
 export default function TransactionsPage() {
   const { token, currentUser } = useAuthSession();
-  const searchParams = useSearchParams();
   const role = currentUser?.role ?? null;
 
   const canCreateTransaction = role ? CREATE_TRANSACTION_ROLES.includes(role) : false;
@@ -202,7 +200,6 @@ export default function TransactionsPage() {
     reason: "",
   });
   const [txSearch, setTxSearch] = useState("");
-  const headerSearchQuery = searchParams.get("q") ?? "";
   const [txFilterType, setTxFilterType] = useState<"ALL" | TxType>("ALL");
   const [txFilterStatus, setTxFilterStatus] = useState<TransactionStatusFilter>("ALL");
 
@@ -353,8 +350,13 @@ export default function TransactionsPage() {
   }
 
   useEffect(() => {
-    setTxSearch(headerSearchQuery);
-  }, [headerSearchQuery]);
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const query = new URLSearchParams(window.location.search).get("q") ?? "";
+    setTxSearch(query);
+  }, []);
 
   useEffect(() => {
     if (!token) return;

@@ -37,6 +37,7 @@ export async function syncExpenseToApprovals() {
   await prisma.approval.createMany({
     data: txns.map((t) => ({
       transactionId: t.id,
+      approverId: null,
       status: statusMap[t.status] ?? "PENDING",
     })),
   });

@@ -52,8 +52,8 @@ describe("approval-service", () => {
     expect(result).toEqual({ synced: 2 });
     expect(approvalCreateManyMock).toHaveBeenCalledWith({
       data: [
-        { transactionId: "t1", status: "PENDING" },
-        { transactionId: "t2", status: "APPROVED" },
+        { transactionId: "t1", approverId: null, status: "PENDING" },
+        { transactionId: "t2", approverId: null, status: "APPROVED" },
       ],
     });
   });

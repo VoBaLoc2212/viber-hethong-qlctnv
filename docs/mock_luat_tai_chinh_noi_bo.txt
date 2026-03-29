@@ -1,0 +1,27 @@
+TÀI LIỆU GIẢ LẬP - KHÔNG PHẢI DỮ LIỆU THẬT
+Phạm vi: Chính sách tài chính nội bộ (mock data phục vụ test AI)
+Phiên bản: 2026.03
+
+1) Mục đích
+- Chuẩn hóa việc lập kế hoạch, sử dụng và kiểm soát ngân sách.
+- Làm dữ liệu mẫu cho hệ thống tra cứu tri thức nội bộ.
+
+2) Nguyên tắc chung
+- Mọi khoản chi phải có chứng từ hợp lệ.
+- Khoản chi vượt 50.000.000 VND cần phê duyệt cấp quản lý + tài chính.
+- Khoản chi vượt 200.000.000 VND cần phê duyệt FINANCE_ADMIN.
+
+3) Khung ngân sách theo phòng ban (mẫu)
+- IT: 50.000.000 VND / tháng.
+- Marketing: 100.000.000 VND / tháng.
+- Operations: 80.000.000 VND / tháng.
+
+4) Quy định cảnh báo
+- Mức cảnh báo mềm: 80% ngân sách.
+- Mức chặn cứng: 100% ngân sách nếu bật hard-stop.
+
+5) Đối soát và lưu trữ
+- Đối soát vào ngày làm việc cuối cùng hàng tháng.
+- Dữ liệu lưu trữ phục vụ kiểm toán nội bộ 36 tháng.
+
+Ghi chú: Đây là tài liệu giả lập phục vụ demo/UAT, không dùng cho vận hành thực tế.

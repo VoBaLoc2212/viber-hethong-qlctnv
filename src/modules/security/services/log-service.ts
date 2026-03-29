@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
-import { type AuthContext, requireRole, writeAuditLog } from "@/modules/shared";
+import { assertNotAuditorForMutation, type AuthContext, requireRole, writeAuditLog } from "@/modules/shared";
 import { AppError } from "@/modules/shared/errors/app-error";
 
 type LogFilter = {
@@ -111,6 +111,7 @@ async function createImmutableLogEntry(
 
 export async function createImmutableLog(auth: AuthContext, payload: ImmutableLogPayload, correlationId: string) {
   requireRole(auth, ["FINANCE_ADMIN", "ACCOUNTANT"]);
+  assertNotAuditorForMutation(auth);
 
   return createImmutableLogEntry(auth.userId, payload, correlationId, {
     sourceType: "USER",

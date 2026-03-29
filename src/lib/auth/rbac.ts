@@ -11,30 +11,37 @@ export const ROLE_LANDING_PATH: Record<UserRole, string> = {
   AUDITOR: "/security",
 };
 
+const ALL_ROLES: UserRole[] = ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"];
+const ANALYST_ROLES: UserRole[] = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"];
+const SECURITY_ROLES: UserRole[] = ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"];
+const FINANCE_ADMIN_ONLY: UserRole[] = ["FINANCE_ADMIN"];
+
 export const ROUTE_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
-  { matcher: /^\/reports(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
-  { matcher: /^\/security(?:\/.*)?$/, roles: ["FINANCE_ADMIN", "ACCOUNTANT", "AUDITOR"] },
-  { matcher: /^\/budgeting(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
-  { matcher: /^\/budgets(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
-  { matcher: /^\/approvals(?:\/.*)?$/, roles: ["MANAGER", "FINANCE_ADMIN"] },
+  { matcher: /^\/reports(?:\/.*)?$/, roles: ANALYST_ROLES },
+  { matcher: /^\/security(?:\/.*)?$/, roles: SECURITY_ROLES },
+  { matcher: /^\/users(?:\/.*)?$/, roles: FINANCE_ADMIN_ONLY },
+  { matcher: /^\/fx-rates(?:\/.*)?$/, roles: FINANCE_ADMIN_ONLY },
+  { matcher: /^\/budgeting(?:\/.*)?$/, roles: ANALYST_ROLES },
+  { matcher: /^\/budgets(?:\/.*)?$/, roles: ANALYST_ROLES },
+  { matcher: /^\/approvals(?:\/.*)?$/, roles: ANALYST_ROLES },
   {
     matcher: /^\/(?:dashboard|transactions|ai-assistant)(?:\/.*)?$/,
-    roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ALL_ROLES,
   },
 ];
 
 export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   {
     matcher: /^\/api\/departments(?:\/.*)?$/,
-    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ANALYST_ROLES,
   },
   {
     matcher: /^\/api\/transactions(?:\/.*)?$/,
-    roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ALL_ROLES,
   },
   {
     matcher: /^\/api\/dashboard\/(?:kpis|expenses-by-month)(?:\/.*)?$/,
-    roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ALL_ROLES,
   },
   {
     matcher: /^\/api\/cashbook(?:\/.*)?$/,
@@ -42,65 +49,109 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   },
   {
     matcher: /^\/api\/approvals(?:\/.*)?$/,
-    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ANALYST_ROLES,
+  },
+  {
+    matcher: /^\/api\/budgets(?:\/.*)?$/,
+    roles: ANALYST_ROLES,
+  },
+  {
+    matcher: /^\/api\/logs\/immutable(?:\/.*)?$/,
+    roles: ["FINANCE_ADMIN", "ACCOUNTANT"],
   },
   {
     matcher: /^\/api\/logs(?:\/.*)?$/,
     roles: ["FINANCE_ADMIN", "AUDITOR"],
   },
   {
+    matcher: /^\/api\/ledger\/[^/]+\/reversal(?:\/.*)?$/,
+    roles: ["FINANCE_ADMIN", "ACCOUNTANT"],
+  },
+  {
     matcher: /^\/api\/ledger(?:\/.*)?$/,
     roles: ["FINANCE_ADMIN", "ACCOUNTANT", "AUDITOR"],
+  },
+  {
+    matcher: /^\/api\/fx-rates(?:\/.*)?$/,
+    roles: FINANCE_ADMIN_ONLY,
+  },
+  {
+    matcher: /^\/api\/controls\/hard-stop(?:\/.*)?$/,
+    roles: FINANCE_ADMIN_ONLY,
+  },
+  {
+    matcher: /^\/api\/users(?:\/.*)?$/,
+    roles: FINANCE_ADMIN_ONLY,
+  },
+  {
+    matcher: /^\/api\/reports(?:\/.*)?$/,
+    roles: ANALYST_ROLES,
+  },
+  {
+    matcher: /^\/api\/ai\/knowledge(?:\/.*)?$/,
+    roles: FINANCE_ADMIN_ONLY,
   },
 ];
 
 export const NAV_ITEMS: Array<{
   href: string;
   label: string;
-  icon: "dashboard" | "transactions" | "budgets" | "reports" | "security" | "assistant";
+  icon: "dashboard" | "transactions" | "budgeting" | "budgets" | "reports" | "security" | "users" | "assistant" | "fxRates";
   roles: UserRole[];
 }> = [
   {
     href: "/dashboard",
-    label: "Dashboard",
+    label: "Tổng quan",
     icon: "dashboard",
-    roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ALL_ROLES,
   },
   {
     href: "/transactions",
-    label: "Transactions",
+    label: "Giao dịch",
     icon: "transactions",
-    roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ALL_ROLES,
   },
   {
     href: "/budgeting",
-    label: "Budgeting",
-    icon: "budgets",
-    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    label: "Điều phối ngân sách",
+    icon: "budgeting",
+    roles: ANALYST_ROLES,
   },
   {
     href: "/budgets",
-    label: "Budgets",
+    label: "Ngân sách",
     icon: "budgets",
-    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ANALYST_ROLES,
   },
   {
     href: "/reports",
-    label: "Reports",
+    label: "Báo cáo",
     icon: "reports",
-    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ANALYST_ROLES,
   },
   {
     href: "/security",
-    label: "Security",
+    label: "Bảo mật & Nhật ký",
     icon: "security",
-    roles: ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: SECURITY_ROLES,
+  },
+  {
+    href: "/users",
+    label: "Quản lý người dùng",
+    icon: "users",
+    roles: FINANCE_ADMIN_ONLY,
+  },
+  {
+    href: "/fx-rates",
+    label: "Quản lý tỷ giá",
+    icon: "fxRates",
+    roles: FINANCE_ADMIN_ONLY,
   },
   {
     href: "/ai-assistant",
-    label: "AI Assistant",
+    label: "Trợ lý AI",
     icon: "assistant",
-    roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ALL_ROLES,
   },
 ];
 

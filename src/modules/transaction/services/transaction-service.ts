@@ -144,6 +144,7 @@ type ListTransactionsFilter = {
   status?: TransactionStatus;
   departmentId?: string;
   budgetId?: string;
+  q?: string;
 };
 
 export async function listTransactions(auth: AuthContext, filter: ListTransactionsFilter) {
@@ -153,11 +154,21 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
   const limit = Number.isFinite(filter.limit) && filter.limit > 0 ? Math.min(filter.limit, 100) : 20;
   const skip = (page - 1) * limit;
 
+  const keyword = filter.q?.trim().slice(0, 100);
+
   const where: Prisma.TransactionWhereInput = {
     type: filter.type,
     status: filter.status,
     departmentId: filter.departmentId,
     budgetId: filter.budgetId,
+    ...(keyword
+      ? {
+          OR: [
+            { code: { contains: keyword, mode: "insensitive" } },
+            { description: { contains: keyword, mode: "insensitive" } },
+          ],
+        }
+      : {}),
   };
 
   const [total, rows] = await Promise.all([

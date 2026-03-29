@@ -10,7 +10,7 @@ import {
   apiTransferBudget,
   apiUpdateBudget,
 } from "@/lib/api";
-import type { BudgetItem, BudgetStatus } from "@/lib/api";
+import type { AuthUser, BudgetItem, BudgetStatus } from "@/lib/api";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,7 @@ const DEFAULT_WARNING = 80;
 
 type BudgetingWorkspaceProps = {
   token: string | null;
+  currentUser: AuthUser | null;
 };
 
 function generateIdempotencyKey(prefix: string): string {
@@ -35,7 +36,7 @@ function generateIdempotencyKey(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
-export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
+export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspaceProps) {
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [statusByBudget, setStatusByBudget] = useState<Record<string, BudgetStatus>>({});
   const [selectedBudgetId, setSelectedBudgetId] = useState<string>("");
@@ -70,6 +71,10 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
     if (!selectedBudgetId) return null;
     return statusByBudget[selectedBudgetId] ?? null;
   }, [selectedBudgetId, statusByBudget]);
+
+  const role = currentUser?.role;
+  const canMutateBudget = role === "FINANCE_ADMIN";
+  const canTransferBudget = role === "FINANCE_ADMIN" || role === "MANAGER";
 
   async function refreshBudgets() {
     if (!token) return;
@@ -194,7 +199,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
           ? String((unknownError as { message: unknown }).message)
-          : "Cấu hình policy thất bại";
+          : "Cấu hình chính sách thất bại";
       setError(message);
     }
   }
@@ -205,8 +210,8 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
     <section className="space-y-6">
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle>Budgeting & Budget Control</CardTitle>
-          <CardDescription>Tạo, cập nhật, chuyển ngân sách và cấu hình hard-stop policy.</CardDescription>
+          <CardTitle>Điều phối & kiểm soát ngân sách</CardTitle>
+          <CardDescription>Tạo, cập nhật, chuyển ngân sách và cấu hình chính sách chặn cứng.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!token ? (
@@ -230,6 +235,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
       </Card>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {canMutateBudget ? (
         <Card className="border-border/50 shadow-sm">
           <CardHeader>
             <CardTitle>Tạo ngân sách</CardTitle>
@@ -237,7 +243,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
           <CardContent>
             <form className="space-y-4" onSubmit={handleCreateBudget}>
               <div className="space-y-2">
-                <Label htmlFor="create-department-id">Department ID</Label>
+                <Label htmlFor="create-department-id">ID phòng ban</Label>
                 <Input
                   id="create-department-id"
                   value={createForm.departmentId}
@@ -247,7 +253,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="create-period">Kỳ ngân sách (period)</Label>
+                <Label htmlFor="create-period">Kỳ ngân sách</Label>
                 <Input
                   id="create-period"
                   value={createForm.period}
@@ -257,7 +263,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="create-amount">Amount</Label>
+                <Label htmlFor="create-amount">Số tiền</Label>
                 <Input
                   id="create-amount"
                   value={createForm.amount}
@@ -268,7 +274,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="create-parent-budget-id">Parent Budget ID (optional)</Label>
+                <Label htmlFor="create-parent-budget-id">ID ngân sách cha (tùy chọn)</Label>
                 <Input
                   id="create-parent-budget-id"
                   value={createForm.parentBudgetId}
@@ -282,15 +288,17 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
             </form>
           </CardContent>
         </Card>
+        ) : null}
 
+        {canMutateBudget ? (
         <Card className="border-border/50 shadow-sm">
           <CardHeader>
-            <CardTitle>Budget Control Policy</CardTitle>
+            <CardTitle>Chính sách kiểm soát ngân sách</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleConfigurePolicy}>
               <div className="space-y-2">
-                <Label htmlFor="policy-budget-id">Budget ID (trống = global)</Label>
+                <Label htmlFor="policy-budget-id">ID ngân sách (trống = toàn cục)</Label>
                 <Input
                   id="policy-budget-id"
                   value={policyForm.budgetId}
@@ -309,11 +317,11 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
                     }))
                   }
                 />
-                <Label htmlFor="policy-enabled">Hard Stop Enabled</Label>
+                <Label htmlFor="policy-enabled">Bật chặn cứng</Label>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="policy-warning-threshold">Warning Threshold (%)</Label>
+                <Label htmlFor="policy-warning-threshold">Ngưỡng cảnh báo (%)</Label>
                 <Input
                   id="policy-warning-threshold"
                   type="number"
@@ -330,11 +338,12 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
               </div>
 
               <Button type="submit" disabled={!token}>
-                Lưu policy
+                Lưu chính sách
               </Button>
             </form>
           </CardContent>
         </Card>
+        ) : null}
       </div>
 
       <Card className="border-border/50 shadow-sm">
@@ -346,14 +355,14 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
             <TableHeader>
               <TableRow>
                 <TableHead>ID</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Reserved</TableHead>
-                <TableHead>Used</TableHead>
-                <TableHead>Available</TableHead>
-                <TableHead>Usage%</TableHead>
-                <TableHead>Warning</TableHead>
+                <TableHead>Phòng ban</TableHead>
+                <TableHead>Kỳ</TableHead>
+                <TableHead>Số tiền</TableHead>
+                <TableHead>Dự trữ</TableHead>
+                <TableHead>Đã dùng</TableHead>
+                <TableHead>Còn lại</TableHead>
+                <TableHead>Tỷ lệ dùng %</TableHead>
+                <TableHead>Cảnh báo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -398,6 +407,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
 
       {selectedBudgetId ? (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          {canMutateBudget ? (
           <Card className="border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle>Cập nhật ngân sách: {selectedBudgetId}</CardTitle>
@@ -405,7 +415,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
             <CardContent>
               <form className="space-y-4" onSubmit={handleUpdateBudget}>
                 <div className="space-y-2">
-                  <Label htmlFor="update-amount">Amount mới</Label>
+                  <Label htmlFor="update-amount">Số tiền mới</Label>
                   <Input
                     id="update-amount"
                     value={updateForm.amount}
@@ -415,7 +425,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="update-parent-budget-id">Parent Budget ID</Label>
+                  <Label htmlFor="update-parent-budget-id">ID ngân sách cha</Label>
                   <Input
                     id="update-parent-budget-id"
                     value={updateForm.parentBudgetId}
@@ -429,7 +439,9 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
               </form>
             </CardContent>
           </Card>
+          ) : null}
 
+          {canTransferBudget ? (
           <Card className="border-border/50 shadow-sm">
             <CardHeader>
               <CardTitle>Chuyển ngân sách</CardTitle>
@@ -437,7 +449,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
             <CardContent>
               <form className="space-y-4" onSubmit={handleTransferBudget}>
                 <div className="space-y-2">
-                  <Label htmlFor="transfer-to-budget-id">To Budget ID</Label>
+                  <Label htmlFor="transfer-to-budget-id">ID ngân sách nhận</Label>
                   <Input
                     id="transfer-to-budget-id"
                     value={transferForm.toBudgetId}
@@ -448,7 +460,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="transfer-amount">Amount</Label>
+                  <Label htmlFor="transfer-amount">Số tiền</Label>
                   <Input
                     id="transfer-amount"
                     value={transferForm.amount}
@@ -459,7 +471,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="transfer-reason">Reason</Label>
+                  <Label htmlFor="transfer-reason">Lý do</Label>
                   <Input
                     id="transfer-reason"
                     value={transferForm.reason}
@@ -478,7 +490,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
 
                 {isHardStop ? (
                   <Alert variant="destructive">
-                    <AlertDescription>Hard Stop: available = 0.00, hệ thống khóa thao tác chi/chuyển ra.</AlertDescription>
+                    <AlertDescription>Đang chặn cứng: số dư khả dụng = 0.00, hệ thống khóa thao tác chi/chuyển ra.</AlertDescription>
                   </Alert>
                 ) : null}
 
@@ -488,6 +500,7 @@ export function BudgetingWorkspace({ token }: BudgetingWorkspaceProps) {
               </form>
             </CardContent>
           </Card>
+          ) : null}
         </div>
       ) : null}
     </section>

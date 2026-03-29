@@ -1,0 +1,27 @@
+TÀI LIỆU GIẢ LẬP - KHÔNG PHẢI DỮ LIỆU THẬT
+Quy trình phê duyệt chi phí (mock)
+
+Bước 1: Tạo yêu cầu
+- Nhân viên tạo giao dịch EXPENSE, đính kèm mô tả + chứng từ.
+- Chọn đúng phòng ban và ngân sách liên quan.
+
+Bước 2: Kiểm tra sơ bộ
+- Hệ thống kiểm tra hạn mức ngân sách hiện hành.
+- Nếu vượt ngưỡng cảnh báo 80%, hiển thị cảnh báo.
+- Nếu hard-stop bật và vượt 100%, chặn tạo yêu cầu.
+
+Bước 3: Phê duyệt cấp quản lý
+- MANAGER xem xét lý do chi tiêu.
+- Có thể APPROVE hoặc REJECT.
+
+Bước 4: Phê duyệt tài chính
+- ACCOUNTANT xác thực chứng từ.
+- FINANCE_ADMIN phê duyệt cuối với khoản chi lớn.
+
+Bước 5: Ghi nhận sổ cái
+- Sau khi APPROVED, hệ thống ghi ledger entry.
+- Nếu cần điều chỉnh, dùng bút toán đảo chiều (reversal).
+
+SLA tham chiếu (mock)
+- Yêu cầu < 10.000.000 VND: xử lý trong 4 giờ làm việc.
+- Yêu cầu >= 10.000.000 VND: xử lý trong 1 ngày làm việc.

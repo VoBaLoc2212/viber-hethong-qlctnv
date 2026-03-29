@@ -66,6 +66,41 @@ enum LedgerEntryType {
   REVERSAL
 }
 
+enum ChatRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum AiRoute {
+  SERVICE
+  RAG
+  TEXT2SQL
+}
+
+enum KnowledgeDocumentStatus {
+  PROCESSING
+  READY
+  FAILED
+  ARCHIVED
+}
+
+model FxRate {
+  id           String   @id @default(uuid())
+  fromCurrency String
+  toCurrency   String
+  rateDate     DateTime
+  rate         Decimal  @db.Decimal(18, 6)
+  source       String
+  fetchedAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([fromCurrency, toCurrency, rateDate, source])
+  @@index([fromCurrency, toCurrency, rateDate])
+}
+
 model User {
   id           String   @id @default(uuid())
   username     String   @unique
@@ -77,13 +112,16 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  transactions       Transaction[]
-  approvals          Approval[]          @relation("Approver")
-  approvalRequests   ApprovalRequest[]   @relation("Requester")
-  approvedRequests   ApprovalRequest[]   @relation("ApprovalApprover")
-  accountantRequests ApprovalRequest[]   @relation("ApprovalAccountant")
-  notifications      Notification[]      @relation("NotificationRecipient")
-  ledgerEntries      LedgerEntry[]
+  transactions Transaction[]
+  approvals    Approval[]        @relation("Approver")
+  uploadedAttachments TransactionAttachment[] @relation("AttachmentUploader")
+  recurringTransactions RecurringTransaction[] @relation("RecurringCreator")
+  reconciledLedgerEntries LedgerEntry[] @relation("LedgerReconciler")
+  ledgerEntries LedgerEntry[]
+  budgetTransfers BudgetTransfer[]
+  auditLogs    AuditLog[]
+
+  @@index([role])
 }
 
 model Department {
@@ -500,4 +538,74 @@ model Notification {
   recipient User @relation("NotificationRecipient", fields: [recipientId], references: [id])
 
   @@index([recipientId, isRead])
+}
+
+model ChatSession {
+  id            String    @id @default(uuid())
+  userId        String
+  title         String?
+  archived      Boolean   @default(false)
+  metadata      Json?
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id])
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@index([lastMessageAt])
+}
+
+model ChatMessage {
+  id               String    @id @default(uuid())
+  sessionId        String
+  role             ChatRole
+  content          String
+  intent           String?
+  routeUsed        AiRoute?
+  citations        Json?
+  relatedData      Json?
+  suggestedActions Json?
+  tokenUsage       Json?
+  latencyMs        Int?
+  correlationId    String?
+  createdAt        DateTime  @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([correlationId])
+}
+
+model KnowledgeDocument {
+  id          String                  @id @default(uuid())
+  fileName    String
+  mimeType    String
+  fileSize    Int
+  sha256      String                  @unique
+  status      KnowledgeDocumentStatus @default(PROCESSING)
+  errorMessage String?
+  uploadedById String
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  uploadedBy User               @relation("KnowledgeUploader", fields: [uploadedById], references: [id])
+  chunks     KnowledgeChunk[]
+
+  @@index([status, createdAt])
+  @@index([uploadedById, createdAt])
+}
+
+model KnowledgeChunk {
+  id         String   @id @default(uuid())
+  documentId String
+  chunkIndex Int
+  content    String
+  charCount  Int
+  createdAt  DateTime @default(now())
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, chunkIndex])
 }

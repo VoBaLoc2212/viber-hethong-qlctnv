@@ -1,0 +1,25 @@
+TÀI LIỆU GIẢ LẬP - KHÔNG PHẢI DỮ LIỆU THẬT
+Nghiệp vụ hoàn ứng công tác phí (mock)
+
+I. Định nghĩa
+- Tạm ứng: khoản tiền cấp trước cho nhân sự đi công tác.
+- Hoàn ứng: quyết toán sau công tác, đối chiếu chứng từ thực tế.
+
+II. Bộ chứng từ bắt buộc
+- Quyết định cử đi công tác.
+- Vé tàu/xe/máy bay hoặc hóa đơn lưu trú.
+- Hóa đơn chi phí phát sinh hợp lệ.
+
+III. Quy tắc quyết toán (mẫu)
+- Nộp chứng từ trong vòng 07 ngày làm việc sau khi kết thúc công tác.
+- Chi vượt định mức cần giải trình và phê duyệt bổ sung.
+- Chi thiếu chứng từ hợp lệ sẽ không được hoàn trả.
+
+IV. Hạch toán tham chiếu
+- Tạm ứng: ghi nhận khoản phải thu nhân viên.
+- Quyết toán: kết chuyển vào chi phí phòng ban.
+
+V. Ví dụ mock
+- Tạm ứng: 15.000.000 VND
+- Chi thực tế hợp lệ: 12.800.000 VND
+- Hoàn lại quỹ: 2.200.000 VND

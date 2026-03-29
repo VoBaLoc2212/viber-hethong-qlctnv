@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma/client";
-import { type AuthContext, requireRole } from "@/modules/shared";
+import { assertNotAuditorForMutation, type AuthContext, requireRole } from "@/modules/shared";
 import { AppError } from "@/modules/shared/errors/app-error";
 
 type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -96,6 +96,7 @@ export async function listApprovals(auth: AuthContext, filter: ApprovalListFilte
 
 export async function bootstrapApprovalRequests(auth: AuthContext, correlationId: string) {
   requireRole(auth, ["FINANCE_ADMIN"]);
+  assertNotAuditorForMutation(auth);
 
   const pending = await prisma.transaction.findMany({
     where: {

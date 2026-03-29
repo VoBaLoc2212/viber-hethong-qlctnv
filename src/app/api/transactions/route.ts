@@ -3,6 +3,7 @@ import type { TransactionStatus, TransactionType } from "@prisma/client";
 
 import { createTransaction, listTransactions } from "@/modules/transaction";
 import { created, handleApiError, ok, readJsonBody, requireAuth, requireRole } from "@/modules/shared";
+import { AppError } from "@/modules/shared/errors/app-error";
 import { getCorrelationId } from "@/modules/shared/http/request";
 
 function normalizeAmount(amount: string | number | undefined): string | undefined {
@@ -16,6 +17,12 @@ function normalizeAmount(amount: string | number | undefined): string | undefine
   }
 
   return undefined;
+}
+
+function normalizeCurrency(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const normalized = value.trim().toUpperCase();
+  return normalized.length ? normalized : null;
 }
 
 export async function GET(request: NextRequest) {
@@ -32,6 +39,7 @@ export async function GET(request: NextRequest) {
       status: (searchParams.get("status") as TransactionStatus | null) ?? undefined,
       departmentId: searchParams.get("departmentId") ?? undefined,
       budgetId: searchParams.get("budgetId") ?? undefined,
+      q: searchParams.get("q") ?? undefined,
     });
 
     return ok({ data: result.data, total: result.meta.total, page: result.meta.page, limit: result.meta.limit }, {});
@@ -76,29 +84,49 @@ export async function POST(request: NextRequest) {
       }>;
     }>(request);
 
+    const fxCurrency = normalizeCurrency(body.fxCurrency);
+
+    if (fxCurrency === "USD") {
+      if (body.type !== "EXPENSE") {
+        throw new AppError("USD is currently supported for EXPENSE only", "UNPROCESSABLE_ENTITY");
+      }
+
+      if (body.fxAmount == null) {
+        throw new AppError("fxAmount is required when fxCurrency is USD", "INVALID_INPUT");
+      }
+
+      if (!body.date) {
+        throw new AppError("date is required when fxCurrency is USD", "INVALID_INPUT");
+      }
+    }
+
+    const isUsdExpense = fxCurrency === "USD" && body.type === "EXPENSE";
+
     const transaction = await createTransaction(
       auth,
       {
         type: body.type,
-        amount: normalizeAmount(body.amount),
+        amount: isUsdExpense ? undefined : normalizeAmount(body.amount),
         budgetId: body.budgetId ?? null,
         departmentId: body.departmentId ?? null,
         date: body.date,
         description: body.description ?? null,
         status: body.status,
         recurringSourceId: body.recurringSourceId ?? null,
-        fxCurrency: body.fxCurrency ?? null,
+        fxCurrency,
         fxAmount: normalizeAmount(body.fxAmount ?? undefined) ?? null,
         fxRate:
-          typeof body.fxRate === "number"
-            ? body.fxRate.toFixed(6)
-            : typeof body.fxRate === "string"
-              ? body.fxRate.trim()
-              : null,
-        baseCurrency: body.baseCurrency ?? null,
-        baseAmount: normalizeAmount(body.baseAmount ?? undefined) ?? null,
-        fxRateProvider: body.fxRateProvider ?? null,
-        fxRateFetchedAt: body.fxRateFetchedAt ?? null,
+          isUsdExpense
+            ? null
+            : typeof body.fxRate === "number"
+              ? body.fxRate.toFixed(6)
+              : typeof body.fxRate === "string"
+                ? body.fxRate.trim()
+                : null,
+        baseCurrency: isUsdExpense ? null : normalizeCurrency(body.baseCurrency),
+        baseAmount: isUsdExpense ? null : (normalizeAmount(body.baseAmount ?? undefined) ?? null),
+        fxRateProvider: isUsdExpense ? null : (body.fxRateProvider ?? null),
+        fxRateFetchedAt: isUsdExpense ? null : (body.fxRateFetchedAt ?? null),
         splits: body.splits?.map((split) => ({
           amount: normalizeAmount(split.amount) ?? "0.00",
           categoryCode: split.categoryCode ?? null,

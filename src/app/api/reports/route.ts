@@ -1,11 +1,12 @@
 import type { NextRequest } from "next/server";
 
 import { getReportsOverview } from "@/modules/report";
-import { handleApiError, ok, requireAuth } from "@/modules/shared";
+import { handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
     const { searchParams } = new URL(request.url);
 
     const data = await getReportsOverview(auth, {

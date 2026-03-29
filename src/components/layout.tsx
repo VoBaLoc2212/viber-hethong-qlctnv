@@ -18,6 +18,8 @@ import {
   Undo2,
   Check,
   Menu,
+  ChevronDown,
+  LogOut,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -56,6 +58,14 @@ import {
   useMarkAllNotificationsRead,
   useGetApprovals,
 } from "@/lib/api-client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -66,6 +76,10 @@ const navItems: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/ai-assistant", label: "AI Assistant", icon: Bot },
 ];
+
+function isPathActive(pathname: string, href: string) {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -81,8 +95,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const approvalsQuery = useGetApprovals({ status: "PENDING" }, { enabled: !!currentUser });
-  const pendingApprovalCount = approvalsQuery.data?.length ?? 0;
+  const approvalBadgeParams = useMemo(() => {
+    if (!currentUser) return null;
+    if (currentUser.role === "MANAGER" || currentUser.role === "FINANCE_ADMIN") {
+      return { tab: "approve", status: "PENDING" as const };
+    }
+    if (currentUser.role === "ACCOUNTANT") {
+      return { tab: "execute", status: "APPROVED" as const };
+    }
+    return null;
+  }, [currentUser]);
+
+  const approvalsQuery = useGetApprovals(approvalBadgeParams ?? {}, { enabled: !!currentUser && !!approvalBadgeParams });
+  const pendingApprovalCount = approvalBadgeParams ? (approvalsQuery.data?.length ?? 0) : 0;
 
   useEffect(() => {
     setMounted(true);
@@ -147,7 +172,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Menu</div>
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const isActive = isPathActive(pathname, item.href);
             const showBadge = item.href === "/approvals" && pendingApprovalCount > 0;
             return (
               <Link key={item.href} href={item.href}>
@@ -213,7 +238,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
                   <div className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Menu</div>
                   {visibleNavItems.map((item) => {
                     const Icon = item.icon;
-                    const isActive = pathname === item.href;
+                    const isActive = isPathActive(pathname, item.href);
+                    const showBadge = item.href === "/approvals" && pendingApprovalCount > 0;
                     return (
                       <Link key={item.href} href={item.href}>
                         <div
@@ -227,7 +253,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
                         `}
                         >
                           <Icon className={`h-5 w-5 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
-                          {item.label}
+                          <span className="flex-1 truncate">{item.label}</span>
+                          {showBadge && (
+                            <span className={`min-w-[20px] h-5 flex items-center justify-center rounded-full text-[10px] font-bold px-1.5 ${
+                              isActive
+                                ? "bg-primary-foreground/20 text-primary-foreground"
+                                : "bg-destructive text-destructive-foreground"
+                            }`}>
+                              {pendingApprovalCount}
+                            </span>
+                          )}
                         </div>
                       </Link>
                     );
@@ -330,16 +365,39 @@ export function AppLayout({ children }: { children: ReactNode }) {
               )}
             </Button>
             <div className="h-6 w-px bg-border mx-1" />
-            <div className="flex items-center gap-3 cursor-pointer hover:bg-secondary/50 p-1.5 pr-3 rounded-full transition-colors">
-              <Avatar className="w-8 h-8 border border-border/50">
-                <AvatarImage src="" />
-                <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">JD</AvatarFallback>
-              </Avatar>
-              <div className="hidden sm:block text-left">
-                <p className="text-sm font-medium leading-none">Jane Doe</p>
-                <p className="text-xs text-muted-foreground">Admin</p>
-              </div>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-auto gap-2 rounded-full p-1.5 pr-3 hover:bg-secondary/50">
+                  <Avatar className="w-8 h-8 border border-border/50">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">
+                      {currentUser?.fullName
+                        ?.split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "Người dùng"}</p>
+                    <p className="text-xs text-muted-foreground">{currentUser?.role ?? "-"}</p>
+                  </div>
+                  <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel className="space-y-1">
+                  <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "Người dùng"}</p>
+                  <p className="text-xs text-muted-foreground">{currentUser?.email ?? ""}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={(event) => { event.preventDefault(); setLogoutDialogOpen(true); }}>
+                  <LogOut className="h-4 w-4" />
+                  Đăng xuất
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 

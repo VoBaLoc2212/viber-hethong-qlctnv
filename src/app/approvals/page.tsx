@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { format } from "date-fns";
 import {
   Plus,
@@ -101,9 +101,11 @@ function StatusBadge({ status }: { status: ApprovalRequestStatus }) {
 const createFormSchema = z.object({
   title: z.string().min(3, "Tiêu đề ít nhất 3 ký tự"),
   description: z.string().optional(),
-  amount: z.coerce.number().positive("Số tiền phải > 0"),
-  departmentId: z.coerce.number().optional(),
+  amount: z.number().positive("Số tiền phải > 0"),
+  departmentId: z.number().optional(),
 });
+
+type CreateFormValues = z.infer<typeof createFormSchema>;
 
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
@@ -133,6 +135,10 @@ function AmountInput({
   placeholder?: string;
 }) {
   const [display, setDisplay] = useState(value ? formatDotNumber(value) : "");
+
+  useEffect(() => {
+    setDisplay(value ? formatDotNumber(value) : "");
+  }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/[^\d]/g, "");
@@ -371,7 +377,7 @@ function MyApprovalsTab() {
     },
   });
 
-  const createForm = useForm<z.infer<typeof createFormSchema>>({
+  const createForm = useForm<CreateFormValues>({
     resolver: zodResolver(createFormSchema),
     defaultValues: { title: "", description: "", amount: 0 },
   });
@@ -382,7 +388,7 @@ function MyApprovalsTab() {
     { departmentId: selectedDepartmentId },
   );
 
-  const editForm = useForm<z.infer<typeof createFormSchema>>({
+  const editForm = useForm<CreateFormValues>({
     resolver: zodResolver(createFormSchema),
   });
 
@@ -397,14 +403,14 @@ function MyApprovalsTab() {
   };
 
   const handleCreateAndSubmit = useCallback(
-    (values: z.infer<typeof createFormSchema>) => {
+    (values: CreateFormValues) => {
       createAndSubmitMutation.mutate({ data: values });
     },
     [createAndSubmitMutation],
   );
 
   const handleCreateSubmitAndApprove = useCallback(
-    (values: z.infer<typeof createFormSchema>) => {
+    (values: CreateFormValues) => {
       if (!managerApproveAccountantId) {
         toast({ title: "Lỗi", description: "Vui lòng chọn kế toán chi", variant: "destructive" });
         return;

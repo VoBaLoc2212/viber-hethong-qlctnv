@@ -329,24 +329,17 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <Moon className="h-5 w-5 text-muted-foreground" />
               )}
             </Button>
-            <div className="mx-0.5 hidden h-6 w-px bg-border sm:block" />
-            <button
-              type="button"
-              className="flex items-center gap-3 rounded-full p-1.5 pr-3 transition-colors hover:bg-secondary/50"
-              onClick={() => setLogoutDialogOpen(true)}
-              disabled={initializing || loggingOut}
-            >
-              <Avatar className="h-8 w-8 border border-border/50">
+            <div className="h-6 w-px bg-border mx-1" />
+            <div className="flex items-center gap-3 cursor-pointer hover:bg-secondary/50 p-1.5 pr-3 rounded-full transition-colors">
+              <Avatar className="w-8 h-8 border border-border/50">
                 <AvatarImage src="" />
-                <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
-                  {currentUser?.fullName?.slice(0, 2).toUpperCase() ?? "NA"}
-                </AvatarFallback>
+                <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">JD</AvatarFallback>
               </Avatar>
-              <div className="hidden text-left sm:block">
-                <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "N/A"}</p>
-                <p className="text-xs text-muted-foreground">{currentUser?.role ?? "N/A"}</p>
+              <div className="hidden sm:block text-left">
+                <p className="text-sm font-medium leading-none">Jane Doe</p>
+                <p className="text-xs text-muted-foreground">Admin</p>
               </div>
-            </button>
+            </div>
           </div>
         </header>
 

@@ -15,6 +15,7 @@
 
 ### Request
 - JSON UTF-8.
+- Riêng endpoint upload file (`/api/transactions/attachments`) dùng `multipart/form-data`.
 - Date/time: ISO-8601 UTC.
 - Money: dùng decimal string ở service boundary nếu cần tránh sai số.
 

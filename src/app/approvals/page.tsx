@@ -101,8 +101,8 @@ function StatusBadge({ status }: { status: ApprovalRequestStatus }) {
 const createFormSchema = z.object({
   title: z.string().min(3, "Tiêu đề ít nhất 3 ký tự"),
   description: z.string().optional(),
-  amount: z.number().positive("Số tiền phải > 0"),
-  departmentId: z.number().optional(),
+  amount: z.coerce.number().positive("Số tiền phải > 0"),
+  departmentId: z.coerce.number().optional(),
 });
 
 const formatCurrency = (val: number) =>

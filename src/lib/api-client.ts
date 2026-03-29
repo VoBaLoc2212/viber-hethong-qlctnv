@@ -285,7 +285,7 @@ export function useGetUsers(role?: UserRole, options?: UseQueryOptions<AppUser[]
 
 export function useGetApprovals(
   params: { tab?: string; status?: ApprovalRequestStatus } = {},
-  options?: Omit<UseQueryOptions<ApprovalRequest[]>, 'queryKey' | 'queryFn'>,
+  options?: UseQueryOptions<ApprovalRequest[]>,
 ) {
   const search = new URLSearchParams();
   if (params.tab) search.set("tab", params.tab);
@@ -373,7 +373,7 @@ export function useApprovalAction(opts?: {
 
 // ─── Notifications ───
 
-export function useGetNotifications(options?: Omit<UseQueryOptions<NotificationsResponse>, 'queryKey' | 'queryFn'>) {
+export function useGetNotifications(options?: UseQueryOptions<NotificationsResponse>) {
   return useQuery({
     queryKey: ["/api/notifications"],
     queryFn: () => fetchJson<NotificationsResponse>("/api/notifications"),

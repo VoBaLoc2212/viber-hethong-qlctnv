@@ -14,6 +14,7 @@ tags:
   - name: controls
   - name: logs
   - name: ledger
+  - name: transactions
 components:
   securitySchemes:
     bearerAuth:
@@ -713,3 +714,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions/reference-data:
+    get:
+      operationId: listTransactionReferenceData
+      tags: [transactions]
+      summary: Lay danh muc phong ban va ngan sach cho form giao dich
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reference data loaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions/attachments:
+    post:
+      operationId: uploadTransactionAttachment
+      tags: [transactions]
+      summary: Upload file hoa don cho giao dich
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        "201":
+          description: Uploaded attachment metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"

@@ -55,7 +55,11 @@ export function normalizeSql(raw: string | null): string {
   return oneLine;
 }
 
-export async function resolveByText2Sql(auth: AuthContext, message: string): Promise<{
+export async function resolveByText2Sql(
+  auth: AuthContext,
+  message: string,
+  options?: { policyKey?: string; dataDomain?: string; scopeApplied?: string },
+): Promise<{
   answer: string;
   citations: AiCitation[];
   relatedData: Record<string, unknown>;
@@ -75,7 +79,13 @@ export async function resolveByText2Sql(auth: AuthContext, message: string): Pro
   const rows = (await prisma.$queryRawUnsafe(safeSql)) as unknown[];
 
   const answer = rows.length === 0 ? "Không có dữ liệu phù hợp với truy vấn này." : `Đã truy vấn ${rows.length} dòng dữ liệu phù hợp.`;
-  const relatedData = { sql: safeSql, rows };
+  const relatedData = {
+    sql: safeSql,
+    rows,
+    policyKey: options?.policyKey ?? "text2sql-default",
+    dataDomain: options?.dataDomain ?? "DATA_RUNTIME",
+    scopeApplied: options?.scopeApplied ?? `text2sql-${auth.role.toLowerCase()}`,
+  };
 
   await setSqlCache(auth.role, message, { answer, relatedData });
 

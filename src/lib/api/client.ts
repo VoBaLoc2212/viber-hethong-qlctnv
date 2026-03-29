@@ -12,15 +12,33 @@ type RequestOptions = {
   headers?: Record<string, string>;
 };
 
+function buildRequestBody(body: unknown) {
+  if (body === undefined || body === null) return undefined;
+  if (body instanceof FormData) return body;
+  return JSON.stringify(body);
+}
+
+function buildRequestHeaders(options: RequestOptions) {
+  const base: Record<string, string> = {
+    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+    ...(options.headers ?? {}),
+  };
+
+  if (options.body instanceof FormData) {
+    return base;
+  }
+
+  return {
+    "Content-Type": "application/json",
+    ...base,
+  };
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await fetch(path, {
     method: options.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
-      ...(options.headers ?? {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    headers: buildRequestHeaders(options),
+    body: buildRequestBody(options.body),
     cache: "no-store",
   });
 

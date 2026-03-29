@@ -14,7 +14,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     requireRole(auth, ["ACCOUNTANT"]);
 
     const { id } = await params;
-    const reimbursement = await completeReimbursement(auth, id, correlationId);
+    const idempotencyKey = request.headers.get("idempotency-key");
+    const reimbursement = await completeReimbursement(auth, id, correlationId, idempotencyKey);
     return ok(reimbursement as Record<string, unknown>, {});
   } catch (error) {
     return handleApiError(request, error);

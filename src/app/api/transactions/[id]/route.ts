@@ -33,7 +33,8 @@ export async function PATCH(request: NextRequest, ctx: Params) {
       reason?: string;
     }>(request);
 
-    const tx = await changeTransactionStatus(auth, id, body, correlationId);
+    const idempotencyKey = request.headers.get("idempotency-key");
+    const tx = await changeTransactionStatus(auth, id, body, correlationId, idempotencyKey);
     return ok(tx, {});
   } catch (unknownError) {
     return handleApiError(request, unknownError);

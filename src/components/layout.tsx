@@ -21,6 +21,8 @@ import {
   Coins,
   ClipboardCheck,
   HandCoins,
+  CheckCheck,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -42,7 +44,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NAV_ITEMS } from "@/lib/auth/rbac";
-import { useGetDashboardKpis, useGetTransactions } from "@/lib/api-client";
+import { useGetTransactions } from "@/lib/api-client";
 import { getRoleLabel, getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -69,15 +71,97 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [hiddenNotificationIds, setHiddenNotificationIds] = useState<string[]>([]);
 
-  const { data: dashboardKpis } = useGetDashboardKpis({ enabled: Boolean(currentUser) });
   const { data: recentTransactions } = useGetTransactions({ limit: 5, page: 1 }, { enabled: Boolean(currentUser) });
 
-  const unreadCount = (dashboardKpis?.pendingCount ?? 0) + (recentTransactions?.data.length ?? 0);
+  const notificationStorageKey = currentUser ? `budgetflow.notifications.${currentUser.id}` : null;
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (!notificationStorageKey || typeof window === "undefined") {
+      setReadNotificationIds([]);
+      setHiddenNotificationIds([]);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(notificationStorageKey);
+      if (!raw) {
+        setReadNotificationIds([]);
+        setHiddenNotificationIds([]);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as { read?: string[]; hidden?: string[] };
+      setReadNotificationIds(Array.isArray(parsed.read) ? parsed.read : []);
+      setHiddenNotificationIds(Array.isArray(parsed.hidden) ? parsed.hidden : []);
+    } catch {
+      setReadNotificationIds([]);
+      setHiddenNotificationIds([]);
+    }
+  }, [notificationStorageKey]);
+
+  useEffect(() => {
+    if (!notificationStorageKey || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(
+      notificationStorageKey,
+      JSON.stringify({ read: readNotificationIds, hidden: hiddenNotificationIds }),
+    );
+  }, [notificationStorageKey, readNotificationIds, hiddenNotificationIds]);
+
+  const notifications = useMemo(() => {
+    return (recentTransactions?.data ?? []).map((tx) => ({
+      id: String(tx.id),
+      transactionCode: tx.transactionCode,
+      type: tx.type,
+      status: tx.status,
+      amount: tx.amount,
+      date: tx.date,
+      description: tx.description,
+    }));
+  }, [recentTransactions?.data]);
+
+  const visibleNotifications = useMemo(() => {
+    if (hiddenNotificationIds.length === 0) {
+      return notifications;
+    }
+    const hidden = new Set(hiddenNotificationIds);
+    return notifications.filter((item) => !hidden.has(item.id));
+  }, [notifications, hiddenNotificationIds]);
+
+  const unreadCount = useMemo(() => {
+    if (readNotificationIds.length === 0) {
+      return visibleNotifications.length;
+    }
+    const read = new Set(readNotificationIds);
+    return visibleNotifications.filter((item) => !read.has(item.id)).length;
+  }, [visibleNotifications, readNotificationIds]);
+
+  function handleMarkAllNotificationsRead() {
+    const allIds = visibleNotifications.map((item) => item.id);
+    if (allIds.length === 0) return;
+    setReadNotificationIds((prev) => Array.from(new Set([...prev, ...allIds])));
+  }
+
+  function handleDeleteReadOrApprovedNotifications() {
+    const read = new Set(readNotificationIds);
+    const toDelete = visibleNotifications
+      .filter((item) => read.has(item.id) || item.status === "APPROVED")
+      .map((item) => item.id);
+
+    if (toDelete.length === 0) return;
+
+    setHiddenNotificationIds((prev) => Array.from(new Set([...prev, ...toDelete])));
+    setReadNotificationIds((prev) => prev.filter((id) => !toDelete.includes(id)));
+  }
 
   const isAuthPage = pathname === "/auth";
 
@@ -250,23 +334,58 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" className="w-80 space-y-3">
-                <div>
-                  <p className="text-sm font-semibold">Thông báo</p>
-                  <p className="text-xs text-muted-foreground">Hiện có {dashboardKpis?.pendingCount ?? 0} giao dịch chờ phê duyệt.</p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Thông báo</p>
+                    <p className="text-xs text-muted-foreground">{unreadCount} chưa đọc / {visibleNotifications.length} hiển thị</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      aria-label="Đánh dấu đã đọc"
+                      onClick={handleMarkAllNotificationsRead}
+                    >
+                      <CheckCheck className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      aria-label="Xóa đã đọc hoặc đã duyệt"
+                      onClick={handleDeleteReadOrApprovedNotifications}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  {recentTransactions?.data.length ? (
-                    recentTransactions.data.map((tx) => (
-                      <div key={tx.id} className="rounded-md border border-border/60 p-2 text-xs">
-                        <p className="font-medium">{tx.transactionCode}</p>
-                        <p className="text-muted-foreground">
-                          {getTransactionTypeLabel(tx.type)} · {getTransactionStatusLabel(tx.status)}
-                        </p>
-                      </div>
-                    ))
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  {visibleNotifications.length ? (
+                    visibleNotifications.map((tx) => {
+                      const isRead = readNotificationIds.includes(tx.id);
+                      return (
+                        <button
+                          key={tx.id}
+                          type="button"
+                          onClick={() => setReadNotificationIds((prev) => (prev.includes(tx.id) ? prev : [...prev, tx.id]))}
+                          className={`w-full rounded-md border p-2 text-left text-xs transition-colors hover:bg-secondary/30 ${isRead ? "border-border/50 bg-muted/20" : "border-border/80 bg-background"}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-medium">{tx.transactionCode}</p>
+                            {!isRead ? <span className="h-2 w-2 shrink-0 rounded-full bg-destructive" /> : null}
+                          </div>
+                          <p className="text-muted-foreground">
+                            {getTransactionTypeLabel(tx.type)} · {getTransactionStatusLabel(tx.status)}
+                          </p>
+                        </button>
+                      );
+                    })
                   ) : (
-                    <p className="text-xs text-muted-foreground">Chưa có giao dịch gần đây.</p>
+                    <p className="text-xs text-muted-foreground">Không còn thông báo cần hiển thị.</p>
                   )}
                 </div>
 

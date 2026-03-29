@@ -8,11 +8,14 @@ import { listLogs } from "@/modules/security";
 import { AppError } from "@/modules/shared/errors/app-error";
 
 import type { AiIntent, AiResolution } from "../types";
+import { resolveAiPolicy } from "./ai-policy";
 
 const REPORT_ROLES = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] as const;
 const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký|tổng thu|tổng chi|tổng ngân sách|số dư|doanh số|thu hiện tại|chi hiện tại/i;
 const NORMALIZED_SERVICE_DATA_PATTERN = /chi phi|ngan?\s*sach|giao dich|expense|income|approval|phe duyet|phong ban|department|bao cao|report|doanh thu|fx|ty gia|usd|vnd|q[1-4]|quy|thang|nam|kpi|danh muc|audit|log|nhat ky|tong thu|tong chi|tong ngan sach|so du|doanh so|thu hien tai|chi hien tai|budget/i;
 const KPI_SUMMARY_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại/i;
+const QUANTITY_PATTERN = /co\s*bao\s*nhieu|bao\s*nhieu|so\s*luong|count|may/i;
+const MONEY_AMOUNT_PATTERN = /bao\s*nhieu\s*tien|bao\s*nhieu\s*vnd|so\s*tien|tong\s*ngan\s*sach|tong\s*chi|tong\s*thu|so\s*du|con\s*bao\s*nhieu|con\s*lai|con\s*kha\s*dung|remaining|available/i;
 
 function canUseReport(auth: AuthContext) {
   return REPORT_ROLES.includes(auth.role as (typeof REPORT_ROLES)[number]);
@@ -59,23 +62,44 @@ function tokenizeSearchText(value: string) {
     .filter((token) => token.length > 0);
 }
 
+function isQuantityQuestionForBudgets(normalizedText: string) {
+  const isQuantity = QUANTITY_PATTERN.test(normalizedText);
+  if (!isQuantity) return false;
+  if (MONEY_AMOUNT_PATTERN.test(normalizedText)) return false;
+  return /ngan?\s*sach|budget|phong\s*ban|department/.test(normalizedText);
+}
+
 export async function resolveByService(auth: AuthContext, intent: AiIntent, message: string): Promise<AiResolution | null> {
   const text = message.toLowerCase();
   const normalizedText = normalizeSearchText(message);
+  const policy = resolveAiPolicy(message, intent, auth.role);
 
   const isServiceDataQuestion = SERVICE_DATA_PATTERN.test(message) || NORMALIZED_SERVICE_DATA_PATTERN.test(normalizedText);
   if (intent === "QUERY" && !isServiceDataQuestion) {
     return null;
   }
 
+  const withPolicy = (resolution: AiResolution): AiResolution => ({
+    ...resolution,
+    dataDomain: policy.dataDomain,
+    policyKey: policy.policyKey,
+    scopeApplied: policy.scopeApplied,
+    relatedData: {
+      ...(resolution.relatedData ?? {}),
+      dataDomain: policy.dataDomain,
+      policyKey: policy.policyKey,
+      scopeApplied: policy.scopeApplied,
+    },
+  });
+
   if (intent === "GREETING") {
-    return {
+    return withPolicy({
       intent,
       routeUsed: "SERVICE",
       rawAnswer: "Chào bạn! Mình có thể hỗ trợ truy vấn chi phí, phân tích ngân sách, dự báo, cảnh báo và hướng dẫn thao tác.",
       citations: [{ source: "ai-assistant", snippet: "greeting-intent" }],
       suggestedActions: ["Thử: Chi phí tháng 1 của phòng Marketing?", "Thử: So sánh chi phí Q1 vs Q2"],
-    };
+    });
   }
 
   if (intent === "GUIDANCE") {
@@ -275,8 +299,6 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
       filtered = filtered.filter((item) => item.departmentId === selected.id);
     }
 
-    const isRemainingQuestion = /con\s*bao\s*nhieu|con\s*lai|remaining|available/i.test(normalizedText);
-
     const budgetTotals = filtered.reduce(
       (acc, item) => ({
         amount: acc.amount + Number(item.amount),
@@ -307,10 +329,11 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
     }
 
     const totalAvailable = totalAmount - totalUsed - totalReserved;
+    const isQuantityBudgetQuestion = isQuantityQuestionForBudgets(normalizedText);
 
-    const summary = isRemainingQuestion
-      ? `Ngân sách còn lại hiện tại: ${totalAvailable.toLocaleString("vi-VN")} VND (đã dùng: ${totalUsed.toLocaleString("vi-VN")}, reserved: ${totalReserved.toLocaleString("vi-VN")}).`
-      : `Tổng ngân sách: ${totalAmount.toLocaleString("vi-VN")} VND; đã dùng: ${totalUsed.toLocaleString("vi-VN")} VND; còn lại: ${totalAvailable.toLocaleString("vi-VN")} VND.`;
+    const summary = isQuantityBudgetQuestion
+      ? `Có ${filtered.length} ngân sách phù hợp${matchedDepartment ? ` cho phòng ban ${matchedDepartment.name} (${matchedDepartment.code})` : ""}.`
+      : `Tổng ngân sách: ${totalAmount.toLocaleString("vi-VN")} VND; đã dùng: ${totalUsed.toLocaleString("vi-VN")} VND; đã giữ chỗ: ${totalReserved.toLocaleString("vi-VN")} VND; còn khả dụng: ${totalAvailable.toLocaleString("vi-VN")} VND.`;
 
     const scopeParts: string[] = [];
     if (matchedDepartment) {
@@ -328,6 +351,8 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
       citations: [{ source: "budget-service", snippet: matchedDepartment ? "department allocation + expense transactions" : "listBudgets aggregated by filter" }],
       relatedData: {
         budgets: filtered,
+        budgetCount: filtered.length,
+        departmentCount: new Set(filtered.map((item) => item.departmentId)).size,
         scope: { matchedPeriod, matchedDepartment },
         totals: { totalAmount, totalUsed, totalReserved, totalAvailable },
       },

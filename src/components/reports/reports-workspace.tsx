@@ -217,8 +217,8 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
                         nameKey="label"
                         cx="50%"
                         cy="50%"
-                        outerRadius={100}
-                        label
+                        outerRadius={92}
+                        labelLine={false}
                       >
                         {expenseCompositionChartData.map((entry, index) => (
                           <Cell key={`${entry.label}-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
@@ -293,7 +293,7 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
             <CardHeader>
               <CardTitle>Thu - Chi theo tháng (6 kỳ gần nhất)</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -319,7 +319,7 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
             <CardHeader>
               <CardTitle>Giao dịch gần đây</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

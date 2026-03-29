@@ -358,9 +358,9 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
                 <TableHead>Phòng ban</TableHead>
                 <TableHead>Kỳ</TableHead>
                 <TableHead>Số tiền</TableHead>
-                <TableHead>Dự trữ</TableHead>
+                <TableHead>Đã giữ chỗ</TableHead>
                 <TableHead>Đã dùng</TableHead>
-                <TableHead>Còn lại</TableHead>
+                <TableHead>Còn khả dụng</TableHead>
                 <TableHead>Tỷ lệ dùng %</TableHead>
                 <TableHead>Cảnh báo</TableHead>
               </TableRow>

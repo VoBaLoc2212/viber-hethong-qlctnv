@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 
 import {
   apiCreateRecurringTemplate,
@@ -148,6 +149,7 @@ function makeIdempotencyKey(prefix: string) {
 
 export default function TransactionsPage() {
   const { token, currentUser } = useAuthSession();
+  const searchParams = useSearchParams();
   const role = currentUser?.role ?? null;
 
   const canCreateTransaction = role ? CREATE_TRANSACTION_ROLES.includes(role) : false;
@@ -200,6 +202,7 @@ export default function TransactionsPage() {
     reason: "",
   });
   const [txSearch, setTxSearch] = useState("");
+  const headerSearchQuery = searchParams.get("q") ?? "";
   const [txFilterType, setTxFilterType] = useState<"ALL" | TxType>("ALL");
   const [txFilterStatus, setTxFilterStatus] = useState<TransactionStatusFilter>("ALL");
 
@@ -263,7 +266,10 @@ export default function TransactionsPage() {
         !keyword ||
         tx.transactionCode.toLowerCase().includes(keyword) ||
         (tx.description ?? "").toLowerCase().includes(keyword) ||
-        TX_STATUS_LABEL[tx.status].toLowerCase().includes(keyword);
+        TX_STATUS_LABEL[tx.status].toLowerCase().includes(keyword) ||
+        TX_TYPE_LABEL[tx.type].toLowerCase().includes(keyword) ||
+        formatMoney(tx.amount).toLowerCase().includes(keyword) ||
+        new Date(tx.date).toLocaleString("vi-VN").toLowerCase().includes(keyword);
       return matchType && matchStatus && matchKeyword;
     });
   }, [transactions, txFilterType, txFilterStatus, txSearch]);
@@ -345,6 +351,10 @@ export default function TransactionsPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    setTxSearch(headerSearchQuery);
+  }, [headerSearchQuery]);
 
   useEffect(() => {
     if (!token) return;

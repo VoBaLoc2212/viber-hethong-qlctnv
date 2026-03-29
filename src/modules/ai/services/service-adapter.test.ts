@@ -61,14 +61,23 @@ describe("service-adapter budget routing", () => {
           id: "b1",
           amount: 100000000,
           used: 32000000,
-          reserved: 0,
+          reserved: 5000000,
           period: "2026-03",
           departmentId: "d1",
+        },
+        {
+          id: "b2",
+          amount: 50000000,
+          used: 10000000,
+          reserved: 2500000,
+          period: "2026-04",
+          departmentId: "d2",
         },
       ],
     });
     prismaDepartmentFindManyMock.mockResolvedValue([
       { id: "d1", name: "Marketing", code: "MKT", budgetAllocated: 100000000 },
+      { id: "d2", name: "IT", code: "IT", budgetAllocated: 50000000 },
     ]);
     prismaTransactionFindManyMock.mockResolvedValue([{ amount: 32000000 }]);
   });
@@ -78,6 +87,8 @@ describe("service-adapter budget routing", () => {
 
     expect(result?.routeUsed).toBe("SERVICE");
     expect(result?.rawAnswer).toContain("Tổng ngân sách");
+    expect(result?.rawAnswer).toContain("đã giữ chỗ");
+    expect(result?.rawAnswer).toContain("còn khả dụng");
     expect(listBudgetsMock).toHaveBeenCalledTimes(1);
   });
 
@@ -93,6 +104,26 @@ describe("service-adapter budget routing", () => {
 
     expect(result?.routeUsed).toBe("SERVICE");
     expect(result?.rawAnswer).toContain("Tổng ngân sách");
+  });
+
+  it("returns count-first answer for quantity budget question", async () => {
+    const result = await resolveByService(auth, "QUERY", "Có bao nhiêu ngân sách phòng ban?");
+
+    expect(result?.routeUsed).toBe("SERVICE");
+    expect(result?.rawAnswer).toContain("Có 2 ngân sách phù hợp");
+    expect(result?.rawAnswer).not.toContain("Tổng ngân sách");
+    expect(result?.relatedData?.budgetCount).toBe(2);
+    expect(result?.relatedData?.departmentCount).toBe(2);
+  });
+
+  it("keeps amount summary for explicit remaining amount question", async () => {
+    const result = await resolveByService(auth, "QUERY", "Ngân sách còn bao nhiêu tiền?");
+
+    expect(result?.routeUsed).toBe("SERVICE");
+    expect(result?.rawAnswer).toContain("Tổng ngân sách");
+    expect(result?.rawAnswer).toContain("đã dùng");
+    expect(result?.rawAnswer).toContain("đã giữ chỗ");
+    expect(result?.rawAnswer).toContain("còn khả dụng");
   });
 
   it("keeps generic non-service query unresolved", async () => {

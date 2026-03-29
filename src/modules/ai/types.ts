@@ -15,6 +15,8 @@ export type AiChatRequest = {
   clientMessageId?: string;
 };
 
+export type AiDataDomain = "DATA_RUNTIME" | "PROCESS_POLICY" | "GENERAL";
+
 export type AiChatResponse = {
   sessionId: string;
   answer: string;
@@ -22,6 +24,9 @@ export type AiChatResponse = {
   routeUsed: AiRouteUsed;
   citations: AiCitation[];
   relatedData?: Record<string, unknown>;
+  dataDomain?: AiDataDomain;
+  policyKey?: string;
+  scopeApplied?: string;
   suggestedActions: string[];
 };
 
@@ -59,6 +64,9 @@ export type AiResolution = {
   rawAnswer: string;
   citations: AiCitation[];
   relatedData?: Record<string, unknown>;
+  dataDomain?: AiDataDomain;
+  policyKey?: string;
+  scopeApplied?: string;
   suggestedActions?: string[];
 };
 

@@ -509,6 +509,14 @@ type ReimbursementAction =
   | "review-settlement"
   | "complete";
 
+function createIdempotencyKey(prefix: string) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `${prefix}-${crypto.randomUUID()}`;
+  }
+
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function useReimbursementAction(opts?: {
   mutation?: UseMutationOptions<
     ReimbursementItem,
@@ -521,11 +529,18 @@ export function useReimbursementAction(opts?: {
   >;
 }) {
   return useMutation({
-    mutationFn: ({ id, action, data }) =>
-      fetchJson<ReimbursementItem>(`/api/reimbursements/${id}/${action}`, {
+    mutationFn: ({ id, action, data }) => {
+      const headers: Record<string, string> = {};
+      if (action === "pay-advance" || action === "complete") {
+        headers["idempotency-key"] = createIdempotencyKey(`reimbursement-${action}`);
+      }
+
+      return fetchJson<ReimbursementItem>(`/api/reimbursements/${id}/${action}`, {
         method: "POST",
+        headers,
         body: JSON.stringify(data ?? {}),
-      }),
+      });
+    },
     ...(opts?.mutation ?? {}),
   });
 }

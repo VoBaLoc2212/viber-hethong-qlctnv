@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AiIntent, AiResolution } from "../types";
 import { handleAiChat } from "./chat-orchestrator";
+import { resolveAiPolicy } from "./ai-policy";
 
 const {
   ensureChatSessionMock,
@@ -79,9 +80,31 @@ describe("chat-orchestrator routing", () => {
     } satisfies AiResolution);
 
     const result = await handleAiChat(buildInput("Tổng ngân sách hiện tại"));
+    const policy = resolveAiPolicy("Tổng ngân sách hiện tại", "QUERY", "MANAGER");
 
     expect(result.routeUsed).toBe("SERVICE");
     expect(result.answer).toBe("service answer");
+    expect(result.dataDomain).toBe(policy.dataDomain);
+    expect(result.policyKey).toBe(policy.policyKey);
+    expect(result.scopeApplied).toBe(policy.scopeApplied);
+    expect(resolveByRagMock).not.toHaveBeenCalled();
+    expect(resolveByText2SqlMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps SERVICE result for quantity budget question", async () => {
+    resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
+    resolveByServiceMock.mockResolvedValue({
+      intent: "QUERY",
+      routeUsed: "SERVICE",
+      rawAnswer: "Có 2 ngân sách phù hợp.",
+      citations: [{ source: "budget-service", snippet: "budget count" }],
+      relatedData: { budgetCount: 2, departmentCount: 2 },
+    } satisfies AiResolution);
+
+    const result = await handleAiChat(buildInput("Có bao nhiêu ngân sách phòng ban?"));
+
+    expect(result.routeUsed).toBe("SERVICE");
+    expect(result.answer).toContain("Có 2 ngân sách phù hợp");
     expect(resolveByRagMock).not.toHaveBeenCalled();
     expect(resolveByText2SqlMock).not.toHaveBeenCalled();
   });
@@ -135,5 +158,22 @@ describe("chat-orchestrator routing", () => {
     expect(resolveByText2SqlMock).toHaveBeenCalledTimes(1);
     expect(result.routeUsed).toBe("RAG");
     expect(result.answer).toContain("chưa đủ nguồn");
+  });
+
+  it("returns controlled RBAC message for data-runtime policy when retrieval paths are unavailable", async () => {
+    resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
+    resolveByServiceMock.mockResolvedValue(null);
+    resolveByRagMock.mockResolvedValue({
+      answer: "Hiện chưa đủ nguồn, vào trang help để xem hướng dẫn",
+      citations: [{ source: "docs/context.md", snippet: "fallback" }],
+    });
+    resolveByText2SqlMock.mockRejectedValue(new Error("blocked"));
+
+    const result = await handleAiChat(buildInput("Có bao nhiêu bản ghi nhật ký hệ thống gần nhất?"));
+
+    expect(result.routeUsed).toBe("SERVICE");
+    expect(result.answer).toContain("phạm vi quyền hiện tại");
+    expect(result.policyKey).toBe("security-logs");
+    expect(result.dataDomain).toBe("DATA_RUNTIME");
   });
 });

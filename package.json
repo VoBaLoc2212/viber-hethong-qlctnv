@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:watch": "vitest",
+    "validation:cleanup-runtime": "tsx scripts/validation/cleanup-runtime-validation.ts",
     "postinstall": "npm run prisma:generate"
   },
   "private": true,

@@ -15,6 +15,12 @@ tags:
   - name: logs
   - name: ledger
   - name: fx-rates
+  - name: transactions
+  - name: approvals
+  - name: reimbursements
+  - name: dashboard
+  - name: reports
+  - name: cashbook
   - name: ai
 components:
   securitySchemes:
@@ -832,6 +838,613 @@ paths:
       responses:
         "200":
           description: Fx rate updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions:
+    get:
+      operationId: listTransactions
+      tags: [transactions]
+      summary: Danh sách giao dịch
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [INCOME, EXPENSE]
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [DRAFT, PENDING, APPROVED, EXECUTED, REJECTED, REVERSED]
+        - in: query
+          name: departmentId
+          schema:
+            type: string
+        - in: query
+          name: budgetId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      operationId: createTransaction
+      tags: [transactions]
+      summary: Tạo giao dịch mới
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: [INCOME, EXPENSE]
+                amount:
+                  oneOf:
+                    - type: string
+                    - type: number
+                budgetId:
+                  type: string
+                  nullable: true
+                departmentId:
+                  type: string
+                  nullable: true
+                date:
+                  type: string
+                  format: date-time
+                description:
+                  type: string
+                  nullable: true
+                status:
+                  type: string
+                  enum: [DRAFT, PENDING, APPROVED, EXECUTED, REJECTED, REVERSED]
+      responses:
+        "201":
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions/{id}:
+    get:
+      operationId: getTransactionById
+      tags: [transactions]
+      summary: Chi tiết giao dịch
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transaction detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    patch:
+      operationId: changeTransactionStatus
+      tags: [transactions]
+      summary: Đổi trạng thái giao dịch
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/correlationId"
+        - in: header
+          name: idempotency-key
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [manager_approve, accountant_approve, reject, execute]
+                note:
+                  type: string
+                reason:
+                  type: string
+              required: [action]
+      responses:
+        "200":
+          description: Transaction status changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions/reference-data:
+    get:
+      operationId: getTransactionReferenceData
+      tags: [transactions]
+      summary: Dữ liệu tham chiếu cho form giao dịch
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Departments and budgets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions/attachments:
+    post:
+      operationId: uploadTransactionAttachment
+      tags: [transactions]
+      summary: Upload file đính kèm giao dịch
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        "201":
+          description: Attachment uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions/recurring:
+    get:
+      operationId: listRecurringTransactions
+      tags: [transactions]
+      summary: Danh sách mẫu giao dịch định kỳ
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: active
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Recurring templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      operationId: createRecurringTransaction
+      tags: [transactions]
+      summary: Tạo mẫu giao dịch định kỳ
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                type:
+                  type: string
+                  enum: [INCOME, EXPENSE]
+                amount:
+                  type: string
+                frequency:
+                  type: string
+                  enum: [DAILY, WEEKLY, MONTHLY, QUARTERLY, ANNUALLY]
+                nextRunAt:
+                  type: string
+                  format: date-time
+                budgetId:
+                  type: string
+                  nullable: true
+                departmentId:
+                  type: string
+                  nullable: true
+                active:
+                  type: boolean
+              required: [name, type, amount, frequency, nextRunAt]
+      responses:
+        "201":
+          description: Recurring template created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /transactions/recurring/run:
+    post:
+      operationId: runRecurringTransactions
+      tags: [transactions]
+      summary: Chạy batch tạo giao dịch định kỳ đến hạn
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      responses:
+        "200":
+          description: Recurring run completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /approvals:
+    get:
+      operationId: listApprovals
+      tags: [approvals]
+      summary: Danh sách phê duyệt
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED]
+      responses:
+        "200":
+          description: List approvals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /approvals/{id}:
+    patch:
+      operationId: patchApprovalById
+      tags: [approvals]
+      summary: Hành động phê duyệt theo vai trò
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/correlationId"
+        - in: header
+          name: idempotency-key
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [approve, reject, execute, not-execute]
+                note:
+                  type: string
+                reason:
+                  type: string
+              required: [action]
+      responses:
+        "200":
+          description: Approval updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /approvals/{id}/action:
+    post:
+      operationId: actApprovalById
+      tags: [approvals]
+      summary: Endpoint tương thích cũ cho approval action
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/correlationId"
+        - in: header
+          name: idempotency-key
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [approve, reject, execute]
+                note:
+                  type: string
+                reason:
+                  type: string
+              required: [action]
+      responses:
+        "200":
+          description: Approval action applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /reimbursements:
+    get:
+      operationId: listReimbursements
+      tags: [reimbursements]
+      summary: Danh sách đề nghị hoàn ứng
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/page"
+        - $ref: "#/components/parameters/limit"
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [DRAFT, SUBMITTED, APPROVED, PAID_ADVANCE, COMPLETED, REJECTED]
+        - in: query
+          name: mine
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Reimbursement list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+    post:
+      operationId: createReimbursement
+      tags: [reimbursements]
+      summary: Tạo đề nghị hoàn ứng
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                purpose:
+                  type: string
+                advanceAmount:
+                  oneOf:
+                    - type: string
+                    - type: number
+              required: [purpose, advanceAmount]
+      responses:
+        "201":
+          description: Reimbursement created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /reimbursements/{id}/pay-advance:
+    post:
+      operationId: payReimbursementAdvance
+      tags: [reimbursements]
+      summary: Chi tạm ứng
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/correlationId"
+        - in: header
+          name: idempotency-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+      responses:
+        "200":
+          description: Advance payment completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /reimbursements/{id}/complete:
+    post:
+      operationId: completeReimbursement
+      tags: [reimbursements]
+      summary: Chốt hoàn ứng
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/correlationId"
+        - in: header
+          name: idempotency-key
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reimbursement completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /dashboard/kpis:
+    get:
+      operationId: getDashboardKpis
+      tags: [dashboard]
+      summary: KPI tổng quan dashboard
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard KPIs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /reports:
+    get:
+      operationId: getReportsOverview
+      tags: [reports]
+      summary: Báo cáo tổng hợp tài chính
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: fromDate
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: toDate
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: departmentId
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reports overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /cashbook:
+    get:
+      operationId: listCashbook
+      tags: [cashbook]
+      summary: Danh sách tài khoản và bút toán sổ quỹ
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: accountId
+          schema:
+            type: string
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: Cashbook list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /cashbook/reconcile:
+    post:
+      operationId: reconcileCashbook
+      tags: [cashbook]
+      summary: Đối soát sổ quỹ và tạo bút toán điều chỉnh
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/correlationId"
+        - in: header
+          name: idempotency-key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accountId:
+                  type: string
+                actualBalance:
+                  type: string
+                reason:
+                  type: string
+              required: [accountId, actualBalance, reason]
+      responses:
+        "201":
+          description: Cashbook reconcile completed
           content:
             application/json:
               schema:

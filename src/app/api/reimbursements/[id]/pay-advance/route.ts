@@ -15,7 +15,8 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { id } = await params;
     const body = await readJsonBody<{ note?: string }>(request);
-    const reimbursement = await payAdvance(auth, id, body.note, correlationId);
+    const idempotencyKey = request.headers.get("idempotency-key");
+    const reimbursement = await payAdvance(auth, id, body.note, correlationId, idempotencyKey);
     return ok(reimbursement as Record<string, unknown>, {});
   } catch (error) {
     return handleApiError(request, error);

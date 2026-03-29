@@ -677,6 +677,8 @@ export async function changeTransactionStatus(
           throw new AppError("Only PENDING/APPROVED transaction can be rejected", "UNPROCESSABLE_ENTITY");
         }
 
+        const expectedApprovalStatus = tx.status === "APPROVED" ? "APPROVED" : "PENDING";
+
         const currentApproval = payload.approvalId
           ? await db.approval.findUnique({
               where: { id: payload.approvalId },
@@ -685,7 +687,7 @@ export async function changeTransactionStatus(
           : await db.approval.findFirst({
               where: {
                 transactionId: tx.id,
-                status: "PENDING",
+                status: expectedApprovalStatus,
               },
               orderBy: { createdAt: "desc" },
               select: { id: true, transactionId: true, status: true },
@@ -693,8 +695,8 @@ export async function changeTransactionStatus(
         if (!currentApproval || currentApproval.transactionId !== tx.id) {
           throw new AppError("Approval not found", "NOT_FOUND");
         }
-        if (currentApproval.status !== "PENDING") {
-          throw new AppError("Approval is already finalized", "CONFLICT");
+        if (currentApproval.status !== expectedApprovalStatus) {
+          throw new AppError("Approval status is invalid for reject action", "CONFLICT");
         }
 
         nextStatus = "REJECTED";

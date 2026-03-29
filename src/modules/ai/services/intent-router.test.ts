@@ -18,6 +18,11 @@ describe("intent-router", () => {
     expect(ruleBasedIntent("Tổng chi tổng thu số dư hiện tại")).toBe("QUERY");
   });
 
+  it("keeps quantity budget questions in QUERY and service-data scope", () => {
+    expect(ruleBasedIntent("Có bao nhiêu ngân sách phòng ban?")).toBe("QUERY");
+    expect(isLikelyServiceDataQuestion("Có bao nhiêu ngân sách phòng ban?")).toBe(true);
+  });
+
   it("detects ALERT intent from warning questions", () => {
     expect(ruleBasedIntent("Phòng nào sắp vượt ngân sách?")).toBe("ALERT");
   });

@@ -235,6 +235,24 @@ async function main() {
     },
   });
 
+  const existingCashbook = await prisma.cashbookAccount.findFirst({
+    where: {
+      name: "Main Cashbook",
+      type: "OPERATING",
+    },
+    select: { id: true },
+  });
+
+  if (!existingCashbook) {
+    await prisma.cashbookAccount.create({
+      data: {
+        name: "Main Cashbook",
+        type: "OPERATING",
+        balance: "1000000000.00",
+      },
+    });
+  }
+
   await prisma.auditLog.create({
     data: {
       actorId: manager.id,

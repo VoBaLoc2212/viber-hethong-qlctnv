@@ -187,7 +187,7 @@ export default function BudgetsPage() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs font-medium">
                       <span className={isOverBudget ? "text-destructive" : isWarning ? "text-yellow-600" : "text-muted-foreground"}>
-                        Đã sử dụng {percentage.toFixed(1)}%
+                        Đã chi {percentage.toFixed(1)}%
                       </span>
                       <span className="text-muted-foreground">Còn lại {formatCurrency(remaining)}</span>
                     </div>

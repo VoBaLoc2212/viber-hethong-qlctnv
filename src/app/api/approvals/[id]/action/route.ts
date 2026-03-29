@@ -44,6 +44,8 @@ export async function POST(request: NextRequest, { params }: Params) {
       throw new AppError("action is invalid", "INVALID_INPUT");
     }
 
+    const idempotencyKey = request.headers.get("idempotency-key");
+
     const transaction = await changeTransactionStatus(
       auth,
       approval.transactionId,
@@ -54,6 +56,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         approvalId: id,
       },
       correlationId,
+      idempotencyKey,
     );
 
     return ok(transaction, {});

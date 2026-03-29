@@ -10,35 +10,51 @@ type ApprovalListFilter = {
   status?: ApprovalStatus;
 };
 
-function approvalStatusWhere(status?: ApprovalStatus) {
-  if (!status) {
-    return {};
-  }
+/**
+ * Sync all EXPENSE transactions that don't have an Approval record yet.
+ * Creates Approval rows with status matching the transaction status.
+ */
+export async function syncExpenseToApprovals() {
+  const txns = await prisma.transaction.findMany({
+    where: {
+      type: "EXPENSE",
+      approvals: { none: {} },
+    },
+    select: { id: true, status: true },
+  });
 
-  return {
-    OR: [{ status }, { statusV2: status }],
+  if (txns.length === 0) return { synced: 0 };
+
+  const statusMap: Record<string, ApprovalStatus> = {
+    PENDING: "PENDING",
+    APPROVED: "APPROVED",
+    EXECUTED: "APPROVED",
+    REJECTED: "REJECTED",
+    REVERSED: "REJECTED",
+    DRAFT: "PENDING",
   };
-}
 
-function effectiveApprovalStatus(status: string, statusV2: ApprovalStatus | null): ApprovalStatus {
-  return statusV2 ?? (status as ApprovalStatus);
+  await prisma.approval.createMany({
+    data: txns.map((t) => ({
+      transactionId: t.id,
+      status: statusMap[t.status] ?? "PENDING",
+    })),
+  });
+
+  return { synced: txns.length };
 }
 
 export async function listApprovals(auth: AuthContext, filter: ApprovalListFilter) {
-  requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
+  requireRole(auth, ["MANAGER", "ACCOUNTANT"]);
 
   const page = Number.isFinite(filter.page) && filter.page > 0 ? filter.page : 1;
   const limit = Number.isFinite(filter.limit) && filter.limit > 0 ? Math.min(filter.limit, 100) : 20;
   const skip = (page - 1) * limit;
 
-  const where = {
-    ...approvalStatusWhere(filter.status),
-    ...(auth.role === "MANAGER"
-      ? { step: 1 }
-      : auth.role === "ACCOUNTANT"
-        ? { step: 2 }
-        : {}),
-  };
+  const where: Record<string, unknown> = {};
+  if (filter.status) {
+    where.status = filter.status;
+  }
 
   const [total, rows] = await Promise.all([
     prisma.approval.count({ where }),
@@ -51,7 +67,6 @@ export async function listApprovals(auth: AuthContext, filter: ApprovalListFilte
         approver: {
           select: {
             id: true,
-            username: true,
             fullName: true,
             role: true,
           },
@@ -63,7 +78,7 @@ export async function listApprovals(auth: AuthContext, filter: ApprovalListFilte
             type: true,
             status: true,
             amount: true,
-            budgetId: true,
+            description: true,
             createdById: true,
             createdAt: true,
           },
@@ -80,72 +95,116 @@ export async function listApprovals(auth: AuthContext, filter: ApprovalListFilte
       transactionType: row.transaction.type,
       transactionStatus: row.transaction.status,
       transactionAmount: row.transaction.amount.toFixed(2),
-      budgetId: row.transaction.budgetId,
+      transactionDescription: row.transaction.description,
       requesterId: row.transaction.createdById,
-      step: row.step,
-      status: effectiveApprovalStatus(row.status, row.statusV2),
+      status: row.status as ApprovalStatus,
       note: row.note,
       approvedAt: row.approvedAt?.toISOString() ?? null,
-      rejectedAt: row.rejectedAt?.toISOString() ?? null,
       createdAt: row.createdAt.toISOString(),
-      approver: row.approver,
+      approver: row.approver
+        ? { id: row.approver.id, fullName: row.approver.fullName, role: row.approver.role }
+        : null,
     })),
     meta: { total, page, limit },
   };
 }
 
-export async function bootstrapApprovalRequests(auth: AuthContext, correlationId: string) {
-  requireRole(auth, ["FINANCE_ADMIN"]);
-
-  const pending = await prisma.transaction.findMany({
-    where: {
-      type: "EXPENSE",
-      status: "PENDING",
-      approvals: { none: { step: 1 } },
-    },
-    select: { id: true },
-  });
-
-  if (pending.length === 0) {
-    return { created: 0 };
-  }
-
-  const manager = await prisma.user.findFirst({
-    where: { role: "MANAGER", isActive: true },
-    select: { id: true },
-  });
-
-  if (!manager) {
-    throw new AppError("No active MANAGER found for approval step 1", "CONFLICT");
-  }
-
-  await prisma.$transaction(async (tx) => {
-    for (const row of pending) {
-      await tx.approval.create({
-        data: {
-          transactionId: row.id,
-          approverId: manager.id,
-          step: 1,
-          status: "PENDING",
-          statusV2: "PENDING",
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorId: auth.userId,
-          action: "APPROVAL_REQUEST_CREATE",
-          entityType: "TRANSACTION",
-          entityId: row.id,
-          correlationId,
-          payload: {
-            step: 1,
-            approverId: manager.id,
-          },
-        },
-      });
+/**
+ * Manager: approve (PENDING→APPROVED) / reject (PENDING→REJECTED)
+ * Accountant: execute (APPROVED→tx EXECUTED) / not-execute (APPROVED→REJECTED)
+ * Also updates the linked transaction status.
+ */
+export async function approvalAction(
+  auth: AuthContext,
+  approvalId: string,
+  action: "approve" | "reject" | "execute" | "not-execute",
+  note?: string,
+) {
+  return prisma.$transaction(async (db) => {
+    const approval = await db.approval.findUnique({
+      where: { id: approvalId },
+      include: { transaction: true },
+    });
+    if (!approval) {
+      throw new AppError("Approval not found", "NOT_FOUND");
     }
-  });
 
-  return { created: pending.length };
+    switch (action) {
+      case "approve": {
+        requireRole(auth, ["MANAGER"]);
+        if (approval.status !== "PENDING") {
+          throw new AppError("Chỉ duyệt được phiếu ở trạng thái PENDING", "UNPROCESSABLE_ENTITY");
+        }
+        await db.approval.update({
+          where: { id: approvalId },
+          data: { status: "APPROVED", approverId: auth.userId, note, approvedAt: new Date() },
+        });
+        await db.transaction.update({
+          where: { id: approval.transactionId },
+          data: { status: "APPROVED" },
+        });
+        break;
+      }
+      case "reject": {
+        requireRole(auth, ["MANAGER"]);
+        if (approval.status !== "PENDING") {
+          throw new AppError("Chỉ từ chối được phiếu ở trạng thái PENDING", "UNPROCESSABLE_ENTITY");
+        }
+        await db.approval.update({
+          where: { id: approvalId },
+          data: { status: "REJECTED", approverId: auth.userId, note },
+        });
+        await db.transaction.update({
+          where: { id: approval.transactionId },
+          data: { status: "REJECTED" },
+        });
+        break;
+      }
+      case "execute": {
+        requireRole(auth, ["ACCOUNTANT"]);
+        if (approval.status !== "APPROVED") {
+          throw new AppError("Chỉ chi được phiếu đã duyệt (APPROVED)", "UNPROCESSABLE_ENTITY");
+        }
+        // Approval stays APPROVED; transaction moves to EXECUTED
+        await db.approval.update({
+          where: { id: approvalId },
+          data: { note },
+        });
+        await db.transaction.update({
+          where: { id: approval.transactionId },
+          data: { status: "EXECUTED" },
+        });
+        break;
+      }
+      case "not-execute": {
+        requireRole(auth, ["ACCOUNTANT"]);
+        if (approval.status !== "APPROVED") {
+          throw new AppError("Chỉ từ chối chi phiếu đã duyệt (APPROVED)", "UNPROCESSABLE_ENTITY");
+        }
+        await db.approval.update({
+          where: { id: approvalId },
+          data: { status: "REJECTED", note },
+        });
+        await db.transaction.update({
+          where: { id: approval.transactionId },
+          data: { status: "REJECTED" },
+        });
+        break;
+      }
+      default:
+        throw new AppError("Invalid action", "INVALID_INPUT");
+    }
+
+    return db.approval.findUnique({
+      where: { id: approvalId },
+      include: {
+        transaction: {
+          select: { id: true, code: true, status: true, amount: true },
+        },
+        approver: {
+          select: { id: true, fullName: true, role: true },
+        },
+      },
+    });
+  });
 }

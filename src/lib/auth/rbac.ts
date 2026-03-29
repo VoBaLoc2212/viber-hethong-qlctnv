@@ -16,7 +16,7 @@ export const ROUTE_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   { matcher: /^\/security(?:\/.*)?$/, roles: ["FINANCE_ADMIN", "ACCOUNTANT", "AUDITOR"] },
   { matcher: /^\/budgeting(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
   { matcher: /^\/budgets(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] },
-  { matcher: /^\/approvals(?:\/.*)?$/, roles: ["MANAGER", "FINANCE_ADMIN"] },
+  { matcher: /^\/approvals(?:\/.*)?$/, roles: ["MANAGER", "ACCOUNTANT"] },
   {
     matcher: /^\/(?:dashboard|transactions|ai-assistant)(?:\/.*)?$/,
     roles: ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
@@ -38,7 +38,7 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   },
   {
     matcher: /^\/api\/approvals(?:\/.*)?$/,
-    roles: ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+    roles: ["MANAGER", "ACCOUNTANT"],
   },
   {
     matcher: /^\/api\/logs(?:\/.*)?$/,

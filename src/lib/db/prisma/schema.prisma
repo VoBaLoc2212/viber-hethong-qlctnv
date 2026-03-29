@@ -15,14 +15,7 @@ enum UserRole {
   AUDITOR
 }
 
-enum ApprovalRequestStatus {
-  NOT_YET
-  PENDING
-  APPROVED
-  NOT_APPROVED
-  EXECUTE
-  NOT_EXECUTE
-}
+
 
 enum TransactionType {
   INCOME
@@ -79,11 +72,12 @@ model User {
 
   transactions       Transaction[]
   approvals          Approval[]          @relation("Approver")
-  approvalRequests   ApprovalRequest[]   @relation("Requester")
-  approvedRequests   ApprovalRequest[]   @relation("ApprovalApprover")
-  accountantRequests ApprovalRequest[]   @relation("ApprovalAccountant")
   notifications      Notification[]      @relation("NotificationRecipient")
   ledgerEntries      LedgerEntry[]
+  ledgerReconciled   LedgerEntry[]       @relation("LedgerReconciler")
+  budgetTransfers    BudgetTransfer[]
+  recurringTx        RecurringTransaction[] @relation("RecurringCreator")
+  attachments        TransactionAttachment[] @relation("AttachmentUploader")
 }
 
 model Department {
@@ -96,7 +90,7 @@ model Department {
 
   budgets           Budget[]
   transactions      Transaction[]
-  approvalRequests  ApprovalRequest[]
+  recurringTx       RecurringTransaction[]
 }
 
 model Budget {
@@ -170,21 +164,38 @@ model Transaction {
 model Approval {
   id            String   @id @default(uuid())
   transactionId String
-  approverId    String
-  step          Int      @default(1)
+  approverId    String?
   status        String
-  statusV2      ApprovalStatus?
   note          String?
   approvedAt    DateTime?
-  rejectedAt    DateTime?
   createdAt     DateTime @default(now())
 
   transaction Transaction @relation(fields: [transactionId], references: [id])
-  approver    User        @relation("Approver", fields: [approverId], references: [id])
+  approver    User?       @relation("Approver", fields: [approverId], references: [id])
 
-  @@index([transactionId, step])
-  @@index([approverId, status])
-  @@index([approverId, statusV2])
+  @@index([transactionId])
+  @@index([status])
+}
+
+model AuditLog {
+  id            String   @id @default(uuid())
+  actorId       String
+  action        String
+  entityType    String
+  entityId      String
+  result        String   @default("SUCCESS")
+  correlationId String?
+  payload       Json?
+  payloadHash   String?
+  prevHash      String?
+  entryHash     String?
+  sourceType    String   @default("USER")
+  sourceId      String?
+  createdAt     DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 model CashbookAccount {
@@ -351,46 +362,7 @@ model BudgetControlPolicy {
   @@unique([budgetId])
 }
 
-model AuditLog {
-  id         String   @id @default(uuid())
-  actorId    String
-  action     String
-  entityType String
-  entityId   String
-  payload    Json?
-  createdAt  DateTime @default(now())
-}
 
-model ApprovalRequest {
-  id              String               @id @default(uuid())
-  requestCode     String               @unique
-  title           String
-  description     String?
-  amount          Decimal              @db.Decimal(18, 2)
-
-  departmentId    String?
-  requesterId     String
-  approverId      String?
-  accountantId    String?
-
-  status          ApprovalRequestStatus @default(NOT_YET)
-
-  rejectionReason   String?
-  notExecuteReason  String?
-  executedAmount    Decimal?           @db.Decimal(18, 2)
-
-  submittedAt     DateTime?
-  approvedAt      DateTime?
-  rejectedAt      DateTime?
-  executedAt      DateTime?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-
-  department  Department?  @relation(fields: [departmentId], references: [id])
-  requester   User         @relation("Requester", fields: [requesterId], references: [id])
-  approver    User?        @relation("ApprovalApprover", fields: [approverId], references: [id])
-  accountant  User?        @relation("ApprovalAccountant", fields: [accountantId], references: [id])
-}
 
 model Notification {
   id            String   @id @default(uuid())

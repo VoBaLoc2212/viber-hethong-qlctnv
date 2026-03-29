@@ -57,10 +57,10 @@ import {
   useGetApprovals,
 } from "@/lib/api-client";
 
-const navItems: { href: string; label: string; icon: LucideIcon }[] = [
+const navItems: { href: string; label: string; icon: LucideIcon; roles?: string[] }[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: Receipt },
-  { href: "/approvals", label: "Quy trình Duyệt chi (Approval)", icon: CheckCircle2 },
+  { href: "/approvals", label: "Quy trình Duyệt chi (Approval)", icon: CheckCircle2, roles: ["MANAGER", "ACCOUNTANT"] },
   { href: "/reimbursement", label: "Hoàn ứng (Reimbursement)", icon: Undo2 },
   { href: "/budgets", label: "Budgets", icon: PieChart },
   { href: "/reports", label: "Reports", icon: BarChart3 },
@@ -81,7 +81,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const approvalsQuery = useGetApprovals({ status: "PENDING" }, { enabled: !!currentUser });
+  const canSeeApprovals = currentUser?.role === "MANAGER" || currentUser?.role === "ACCOUNTANT";
+  const approvalsQuery = useGetApprovals({ status: "PENDING" }, { enabled: !!currentUser && canSeeApprovals });
   const pendingApprovalCount = approvalsQuery.data?.length ?? 0;
 
   useEffect(() => {
@@ -92,7 +93,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
   const visibleNavItems = useMemo(() => {
     if (!currentUser) return [];
-    return navItems;
+    return navItems.filter((item) => !item.roles || item.roles.includes(currentUser.role));
   }, [currentUser]);
 
   async function handleConfirmLogout() {

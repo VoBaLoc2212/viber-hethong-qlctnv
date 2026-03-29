@@ -11,7 +11,7 @@ import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
 
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
-export type ApprovalRequestStatus = "NOT_YET" | "PENDING" | "APPROVED" | "NOT_APPROVED" | "EXECUTE" | "NOT_EXECUTE";
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 export type Department = {
@@ -42,30 +42,20 @@ export type AppUser = {
   role: UserRole;
 };
 
-export type ApprovalRequest = {
-  id: number;
-  requestCode: string;
-  title: string;
-  description: string | null;
-  amount: number;
-  departmentId: number | null;
-  departmentName: string | null;
-  requesterId: number;
-  requesterName: string;
-  approverId: number | null;
-  approverName: string | null;
-  accountantId: number | null;
-  accountantName: string | null;
-  status: ApprovalRequestStatus;
-  rejectionReason: string | null;
-  notExecuteReason: string | null;
-  executedAmount: number | null;
-  submittedAt: string | null;
+export type ApprovalItem = {
+  id: string;
+  transactionId: string;
+  transactionCode: string;
+  transactionType: string;
+  transactionStatus: string;
+  transactionAmount: string;
+  transactionDescription: string | null;
+  requesterId: string;
+  status: ApprovalStatus;
+  note: string | null;
   approvedAt: string | null;
-  rejectedAt: string | null;
-  executedAt: string | null;
   createdAt: string;
-  updatedAt: string;
+  approver: { id: string; fullName: string; role: string } | null;
 };
 
 export type NotificationItem = {
@@ -284,86 +274,36 @@ export function useGetUsers(role?: UserRole, options?: UseQueryOptions<AppUser[]
 // ─── Approvals ───
 
 export function useGetApprovals(
-  params: { tab?: string; status?: ApprovalRequestStatus } = {},
-  options?: Omit<UseQueryOptions<ApprovalRequest[]>, 'queryKey' | 'queryFn'>,
+  params: { status?: ApprovalStatus } = {},
+  options?: Omit<UseQueryOptions<ApprovalItem[]>, 'queryKey' | 'queryFn'>,
 ) {
   const search = new URLSearchParams();
-  if (params.tab) search.set("tab", params.tab);
   if (params.status) search.set("status", params.status);
   const url = `/api/approvals${search.toString() ? `?${search.toString()}` : ""}`;
 
   return useQuery({
     queryKey: ["/api/approvals", params],
-    queryFn: () => fetchJson<ApprovalRequest[]>(url),
+    queryFn: () => fetchJson<ApprovalItem[]>(url),
     ...options,
-  });
-}
-
-export function useCreateApproval(opts?: {
-  mutation?: UseMutationOptions<
-    ApprovalRequest,
-    Error,
-    { data: { title: string; description?: string; amount: number; departmentId?: number } }
-  >;
-}) {
-  return useMutation({
-    mutationFn: ({ data }) =>
-      fetchJson<ApprovalRequest>("/api/approvals", {
-        method: "POST",
-        body: JSON.stringify(data),
-      }),
-    ...(opts?.mutation ?? {}),
-  });
-}
-
-export function useUpdateApproval(opts?: {
-  mutation?: UseMutationOptions<
-    ApprovalRequest,
-    Error,
-    { id: number; data: { title?: string; description?: string; amount?: number; departmentId?: number } }
-  >;
-}) {
-  return useMutation({
-    mutationFn: ({ id, data }) =>
-      fetchJson<ApprovalRequest>(`/api/approvals/${id}`, {
-        method: "PUT",
-        body: JSON.stringify(data),
-      }),
-    ...(opts?.mutation ?? {}),
-  });
-}
-
-export function useDeleteApproval(opts?: {
-  mutation?: UseMutationOptions<{ success: boolean }, Error, { id: number }>;
-}) {
-  return useMutation({
-    mutationFn: ({ id }) =>
-      fetchJson<{ success: boolean }>(`/api/approvals/${id}`, {
-        method: "DELETE",
-      }),
-    ...(opts?.mutation ?? {}),
   });
 }
 
 export function useApprovalAction(opts?: {
   mutation?: UseMutationOptions<
-    ApprovalRequest,
+    ApprovalItem,
     Error,
     {
-      id: number;
+      id: string;
       data: {
-        action: "submit" | "approve" | "reject" | "execute" | "not-execute";
-        accountantId?: number;
-        rejectionReason?: string;
-        notExecuteReason?: string;
-        executedAmount?: number;
+        action: "approve" | "reject" | "execute" | "not-execute";
+        note?: string;
       };
     }
   >;
 }) {
   return useMutation({
     mutationFn: ({ id, data }) =>
-      fetchJson<ApprovalRequest>(`/api/approvals/${id}`, {
+      fetchJson<ApprovalItem>(`/api/approvals/${id}`, {
         method: "PATCH",
         body: JSON.stringify(data),
       }),

@@ -1,21 +1,17 @@
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 
-export type ApprovalRequest = {
+export type ApprovalItem = {
   id: string;
-  requestCode: string;
   transactionId: string;
+  transactionCode: string;
+  transactionType: string;
+  transactionStatus: string;
+  transactionAmount: string;
+  transactionDescription: string | null;
   requesterId: string;
-  approverId: string;
-  amount: string;
   status: ApprovalStatus;
-  approvedAt?: string;
-  rejectedAt?: string;
-  reason?: string;
-};
-
-export type EncumbranceSnapshot = {
-  budgetId: string;
-  reservedBefore: string;
-  reservedAfter: string;
-  amount: string;
+  note: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  approver: { id: string; fullName: string; role: string } | null;
 };

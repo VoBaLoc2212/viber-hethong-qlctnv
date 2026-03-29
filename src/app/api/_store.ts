@@ -1,6 +1,5 @@
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
-export type ApprovalRequestStatus = "NOT_YET" | "PENDING" | "APPROVED" | "NOT_APPROVED" | "EXECUTE" | "NOT_EXECUTE";
 export type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 export type Department = {
@@ -40,32 +39,6 @@ export type AppUser = {
   role: UserRole;
 };
 
-export type ApprovalRequest = {
-  id: number;
-  requestCode: string;
-  title: string;
-  description: string | null;
-  amount: number;
-  departmentId: number | null;
-  departmentName: string | null;
-  requesterId: number;
-  requesterName: string;
-  approverId: number | null;
-  approverName: string | null;
-  accountantId: number | null;
-  accountantName: string | null;
-  status: ApprovalRequestStatus;
-  rejectionReason: string | null;
-  notExecuteReason: string | null;
-  executedAmount: number | null;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  executedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
 export type Notification = {
   id: number;
   recipientId: number;
@@ -81,14 +54,12 @@ export type Notification = {
 export type ViberStore = {
   nextTxId: number;
   nextDeptId: number;
-  nextApprovalId: number;
   nextNotificationId: number;
   nextBudgetId: number;
   departments: Department[];
   budgets: Budget[];
   transactions: Transaction[];
   users: AppUser[];
-  approvalRequests: ApprovalRequest[];
   notifications: Notification[];
   currentUserId: number;
 };
@@ -98,7 +69,6 @@ function createSeedStore(): ViberStore {
   return {
     nextTxId: 3,
     nextDeptId: 3,
-    nextApprovalId: 1,
     nextNotificationId: 1,
     nextBudgetId: 3,
     departments: [
@@ -145,7 +115,6 @@ function createSeedStore(): ViberStore {
       { id: 5, fullName: "Hoang Van E", email: "hve@company.com", role: "ACCOUNTANT" },
       { id: 6, fullName: "Do Thi F", email: "dtf@company.com", role: "FINANCE_ADMIN" },
     ],
-    approvalRequests: [],
     notifications: [],
     currentUserId: 1,
   };
@@ -169,7 +138,6 @@ export function getStore(): ViberStore {
   if (!Array.isArray(store.budgets)) store.budgets = [];
   if (!Array.isArray(store.transactions)) store.transactions = [];
   if (!Array.isArray(store.users)) store.users = createSeedStore().users;
-  if (!Array.isArray(store.approvalRequests)) store.approvalRequests = [];
   if (!Array.isArray(store.notifications)) store.notifications = [];
 
   if (typeof store.nextDeptId !== "number") {
@@ -177,9 +145,6 @@ export function getStore(): ViberStore {
   }
   if (typeof store.nextTxId !== "number") {
     store.nextTxId = computeNextId(store.transactions.map((t: any) => Number(t?.id ?? 0)));
-  }
-  if (typeof store.nextApprovalId !== "number") {
-    store.nextApprovalId = computeNextId(store.approvalRequests.map((a: any) => Number(a?.id ?? 0)));
   }
   if (typeof store.nextNotificationId !== "number") {
     store.nextNotificationId = computeNextId(store.notifications.map((n: any) => Number(n?.id ?? 0)));

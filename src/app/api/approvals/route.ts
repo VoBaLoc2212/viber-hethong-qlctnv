@@ -1,13 +1,15 @@
 import type { NextRequest } from "next/server";
 
-import { bootstrapApprovalRequests, listApprovals } from "@/modules/approval";
+import { listApprovals, syncExpenseToApprovals } from "@/modules/approval";
 import { handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";
-import { getCorrelationId } from "@/modules/shared/http/request";
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
-    requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
+    requireRole(auth, ["MANAGER", "ACCOUNTANT"]);
+
+    // Auto-sync EXPENSE transactions that don't have approval rows yet
+    await syncExpenseToApprovals();
 
     const { searchParams } = new URL(request.url);
     const result = await listApprovals(auth, {
@@ -17,18 +19,6 @@ export async function GET(request: NextRequest) {
     });
 
     return ok({ approvals: result.data }, result.meta);
-  } catch (error) {
-    return handleApiError(request, error);
-  }
-}
-
-export async function POST(request: NextRequest) {
-  const correlationId = getCorrelationId(request);
-
-  try {
-    const auth = await requireAuth(request);
-    const result = await bootstrapApprovalRequests(auth, correlationId);
-    return ok(result, {});
   } catch (error) {
     return handleApiError(request, error);
   }

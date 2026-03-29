@@ -322,7 +322,7 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
   }
 
   if (text.includes("giao dịch") || text.includes("expense") || text.includes("income")) {
-    const transactions = await tryService(() => listTransactions(auth, { page: 1, limit: 10, q: message }));
+    const transactions = await tryService(() => listTransactions(auth, { page: 1, limit: 10 }));
     if (!transactions) return null;
 
     return {

@@ -1,10 +1,10 @@
-import type { Prisma, TransactionStatus, TransactionType } from "@prisma/client";
+import { createHash } from "node:crypto";
+
+import { Prisma, type TransactionStatus, type TransactionType } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
-import { convertUsdToVndByDate } from "@/modules/fx";
 import {
   addMoney,
-  assertNotAuditorForMutation,
   calculateAvailable,
   compareMoney,
   type AuthContext,
@@ -15,6 +15,14 @@ import { AppError } from "@/modules/shared/errors/app-error";
 
 function decimalToString(value: Prisma.Decimal): string {
   return value.toFixed(2);
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+function buildIdempotencyCodeSuffix(value: string) {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12).toUpperCase();
 }
 
 function ensureExpenseStatus(status: TransactionStatus) {
@@ -28,12 +36,6 @@ function ensureIncomeStatus(status: TransactionStatus) {
   if (!allowed.includes(status)) {
     throw new AppError("Income status must be APPROVED or EXECUTED", "INVALID_INPUT");
   }
-}
-
-function normalizeCurrency(value?: string | null): string | null {
-  if (value == null) return null;
-  const normalized = value.trim().toUpperCase();
-  return normalized.length ? normalized : null;
 }
 
 type ApprovalStatusCompat = "PENDING" | "APPROVED" | "REJECTED";
@@ -142,7 +144,6 @@ type ListTransactionsFilter = {
   status?: TransactionStatus;
   departmentId?: string;
   budgetId?: string;
-  q?: string;
 };
 
 export async function listTransactions(auth: AuthContext, filter: ListTransactionsFilter) {
@@ -152,21 +153,11 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
   const limit = Number.isFinite(filter.limit) && filter.limit > 0 ? Math.min(filter.limit, 100) : 20;
   const skip = (page - 1) * limit;
 
-  const keyword = filter.q?.trim().slice(0, 100);
-
   const where: Prisma.TransactionWhereInput = {
     type: filter.type,
     status: filter.status,
     departmentId: filter.departmentId,
     budgetId: filter.budgetId,
-    ...(keyword
-      ? {
-          OR: [
-            { code: { contains: keyword, mode: "insensitive" } },
-            { description: { contains: keyword, mode: "insensitive" } },
-          ],
-        }
-      : {}),
   };
 
   const [total, rows] = await Promise.all([
@@ -220,31 +211,17 @@ type CreateTransactionPayload = {
 
 export async function createTransaction(auth: AuthContext, payload: CreateTransactionPayload, correlationId: string) {
   requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
-  assertNotAuditorForMutation(auth);
 
   if (!payload.type) {
     throw new AppError("type is required", "INVALID_INPUT");
   }
 
-  const txType = payload.type;
-  const inputFxCurrency = normalizeCurrency(payload.fxCurrency);
-  const isUsdExpense = txType === "EXPENSE" && inputFxCurrency === "USD";
-
-  if (inputFxCurrency && inputFxCurrency !== "USD" && inputFxCurrency !== "VND") {
-    throw new AppError("fxCurrency is not supported", "INVALID_INPUT");
-  }
-
-  if (inputFxCurrency === "USD" && txType !== "EXPENSE") {
-    throw new AppError("USD is currently supported for EXPENSE only", "UNPROCESSABLE_ENTITY");
-  }
-
-  if (isUsdExpense && !payload.date) {
-    throw new AppError("date is required for USD expense", "INVALID_INPUT");
-  }
-
-  if (!isUsdExpense && (!payload.amount || compareMoney(payload.amount, "0.00") <= 0)) {
+  if (!payload.amount || compareMoney(payload.amount, "0.00") <= 0) {
     throw new AppError("amount must be greater than 0", "INVALID_INPUT");
   }
+
+  const txType = payload.type;
+  const txAmount = payload.amount;
 
   const status = payload.status ?? (txType === "EXPENSE" ? "PENDING" : "APPROVED");
 
@@ -260,25 +237,12 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
     throw new AppError("date is invalid", "INVALID_INPUT");
   }
 
-  const clientFxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
-  if (payload.fxRateFetchedAt && (!clientFxRateFetchedAt || Number.isNaN(clientFxRateFetchedAt.getTime()))) {
+  const fxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
+  if (payload.fxRateFetchedAt && (!fxRateFetchedAt || Number.isNaN(fxRateFetchedAt.getTime()))) {
     throw new AppError("fxRateFetchedAt is invalid", "INVALID_INPUT");
   }
 
-  if (isUsdExpense && (payload.fxRate || payload.baseAmount || payload.baseCurrency || payload.fxRateProvider || payload.fxRateFetchedAt)) {
-    throw new AppError(
-      "fxRate/baseAmount/baseCurrency/fxRateProvider/fxRateFetchedAt are server-managed for USD expense",
-      "INVALID_INPUT",
-    );
-  }
-
-  const txAmount = payload.amount ?? "";
-
   if (payload.splits && payload.splits.length > 0) {
-    if (isUsdExpense) {
-      throw new AppError("splits are not supported for USD expense", "UNPROCESSABLE_ENTITY");
-    }
-
     const splitTotal = payload.splits.reduce((acc, split) => addMoney(acc, split.amount), "0.00");
     if (compareMoney(splitTotal, txAmount) !== 0) {
       throw new AppError("Sum of splits must equal transaction amount", "INVALID_INPUT");
@@ -299,34 +263,6 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
       const amount = decimalToString(budget.amount);
       const reserved = decimalToString(budget.reserved);
       const used = decimalToString(budget.used);
-
-      let resolvedAmount = txAmount;
-      let resolvedCurrency = "VND";
-      let resolvedFxCurrency: string | null = null;
-      let resolvedFxAmount: string | null = null;
-      let resolvedFxRate: string | null = null;
-      let resolvedBaseCurrency: string | null = null;
-      let resolvedBaseAmount: string | null = null;
-      let resolvedFxRateProvider: string | null = null;
-      let resolvedFxRateFetchedAt: Date | null = null;
-
-      if (isUsdExpense) {
-        if (!payload.fxAmount || compareMoney(payload.fxAmount, "0.00") <= 0) {
-          throw new AppError("fxAmount must be greater than 0 for USD expense", "INVALID_INPUT");
-        }
-
-        const converted = await convertUsdToVndByDate(db, payload.fxAmount, txDate);
-        resolvedAmount = converted.convertedAmount;
-        resolvedCurrency = converted.convertedCurrency;
-        resolvedFxCurrency = converted.originalCurrency;
-        resolvedFxAmount = converted.originalAmount;
-        resolvedFxRate = converted.rate;
-        resolvedBaseCurrency = converted.convertedCurrency;
-        resolvedBaseAmount = converted.convertedAmount;
-        resolvedFxRateProvider = converted.source;
-        resolvedFxRateFetchedAt = new Date(converted.fetchedAt);
-      }
-
       const available = calculateAvailable(amount, reserved, used);
 
       if (compareMoney(available, "0.00") <= 0) {
@@ -336,12 +272,12 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         }
       }
 
-      if (compareMoney(available, resolvedAmount) < 0) {
+      if (compareMoney(available, txAmount) < 0) {
         throw new AppError("Insufficient available budget", "UNPROCESSABLE_ENTITY");
       }
 
       const policy = await getPolicyForBudgetTx(db, budget.id);
-      const nextReserved = addMoney(reserved, resolvedAmount);
+      const nextReserved = addMoney(reserved, txAmount);
       const usagePercent =
         Number(amount) > 0 ? Number((((Number(used) + Number(nextReserved)) / Number(amount)) * 100).toFixed(2)) : 0;
       const warningTriggered = usagePercent >= policy.warningThresholdPct;
@@ -351,18 +287,18 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           code,
           type: txType,
           status,
-          amount: resolvedAmount,
-          currency: resolvedCurrency,
+          amount: txAmount,
+          currency: "VND",
           date: txDate,
           description: payload.description ?? null,
           recurringSourceId: payload.recurringSourceId ?? null,
-          fxCurrency: resolvedFxCurrency,
-          fxAmount: resolvedFxAmount,
-          fxRate: resolvedFxRate,
-          baseCurrency: resolvedBaseCurrency,
-          baseAmount: resolvedBaseAmount,
-          fxRateProvider: resolvedFxRateProvider,
-          fxRateFetchedAt: resolvedFxRateFetchedAt,
+          fxCurrency: payload.fxCurrency ?? null,
+          fxAmount: payload.fxAmount ?? null,
+          fxRate: payload.fxRate ?? null,
+          baseCurrency: payload.baseCurrency ?? null,
+          baseAmount: payload.baseAmount ?? null,
+          fxRateProvider: payload.fxRateProvider ?? null,
+          fxRateFetchedAt,
           budgetId: budget.id,
           departmentId: payload.departmentId ?? budget.departmentId,
           createdById: auth.userId,
@@ -408,18 +344,11 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           payload: {
             type: transaction.type,
             status: transaction.status,
-            amount: resolvedAmount,
+            amount: txAmount,
             budgetId: budget.id,
             warningTriggered,
             warningThresholdPct: policy.warningThresholdPct,
             hardStopEnabled: policy.hardStopEnabled,
-            fxCurrency: resolvedFxCurrency,
-            fxAmount: resolvedFxAmount,
-            fxRate: resolvedFxRate,
-            baseCurrency: resolvedBaseCurrency,
-            baseAmount: resolvedBaseAmount,
-            fxRateProvider: resolvedFxRateProvider,
-            fxRateFetchedAt: resolvedFxRateFetchedAt?.toISOString() ?? null,
           },
         },
       });
@@ -456,13 +385,13 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         date: txDate,
         description: payload.description ?? null,
         recurringSourceId: payload.recurringSourceId ?? null,
-        fxCurrency: inputFxCurrency,
+        fxCurrency: payload.fxCurrency ?? null,
         fxAmount: payload.fxAmount ?? null,
         fxRate: payload.fxRate ?? null,
         baseCurrency: payload.baseCurrency ?? null,
         baseAmount: payload.baseAmount ?? null,
         fxRateProvider: payload.fxRateProvider ?? null,
-        fxRateFetchedAt: clientFxRateFetchedAt,
+        fxRateFetchedAt,
         budgetId: payload.budgetId ?? null,
         departmentId: payload.departmentId ?? null,
         createdById: auth.userId,
@@ -519,13 +448,6 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           referenceType: "TRANSACTION",
           referenceId: transaction.id,
           createdById: auth.userId,
-          fxCurrency: transaction.fxCurrency,
-          fxAmount: transaction.fxAmount,
-          fxRate: transaction.fxRate,
-          baseCurrency: transaction.baseCurrency,
-          baseAmount: transaction.baseAmount,
-          fxRateProvider: transaction.fxRateProvider,
-          fxRateFetchedAt: transaction.fxRateFetchedAt,
           metadata: {
             transactionCode: transaction.code,
           },
@@ -584,43 +506,62 @@ export async function changeTransactionStatus(
   id: string,
   payload: ChangeStatusPayload,
   correlationId: string,
+  idempotencyKey?: string | null,
 ) {
-  assertNotAuditorForMutation(auth);
-
   if (!payload.action) {
     throw new AppError("action is required", "INVALID_INPUT");
   }
 
-  return prisma.$transaction(async (db) => {
-    const tx = await db.transaction.findUnique({ where: { id } });
-    if (!tx) {
-      throw new AppError("Transaction not found", "NOT_FOUND");
-    }
+  try {
+    return await prisma.$transaction(async (db) => {
+      const tx = await db.transaction.findUnique({ where: { id } });
+      if (!tx) {
+        throw new AppError("Transaction not found", "NOT_FOUND");
+      }
 
-    if (tx.status === "EXECUTED" || tx.status === "REVERSED") {
-      throw new AppError("Closed transaction is immutable", "CONFLICT");
-    }
+      if (payload.action === "execute" && idempotencyKey) {
+        const existingExecution = await db.auditLog.findFirst({
+          where: {
+            action: "TRANSACTION_EXECUTE",
+            entityType: "TRANSACTION",
+            entityId: tx.id,
+            payload: {
+              path: ["idempotencyKey"],
+              equals: idempotencyKey,
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        });
 
-    if (tx.type !== "EXPENSE") {
-      throw new AppError("Only EXPENSE transactions are in approval flow", "UNPROCESSABLE_ENTITY");
-    }
+        if (existingExecution) {
+          return toTransactionView(tx);
+        }
+      }
 
-    if (!tx.budgetId) {
-      throw new AppError("Missing budget reference", "CONFLICT");
-    }
+      if (tx.status === "EXECUTED" || tx.status === "REVERSED") {
+        throw new AppError("Closed transaction is immutable", "CONFLICT");
+      }
 
-    const budget = await db.budget.findUnique({ where: { id: tx.budgetId } });
-    if (!budget) {
-      throw new AppError("Budget not found", "NOT_FOUND");
-    }
+      if (tx.type !== "EXPENSE") {
+        throw new AppError("Only EXPENSE transactions are in approval flow", "UNPROCESSABLE_ENTITY");
+      }
 
-    const amount = decimalToString(budget.amount);
-    const reserved = decimalToString(budget.reserved);
-    const used = decimalToString(budget.used);
+      if (!tx.budgetId) {
+        throw new AppError("Missing budget reference", "CONFLICT");
+      }
 
-    let nextStatus: TransactionStatus;
+      const budget = await db.budget.findUnique({ where: { id: tx.budgetId } });
+      if (!budget) {
+        throw new AppError("Budget not found", "NOT_FOUND");
+      }
 
-    switch (payload.action) {
+      const amount = decimalToString(budget.amount);
+      const reserved = decimalToString(budget.reserved);
+      const used = decimalToString(budget.used);
+
+      let nextStatus: TransactionStatus;
+
+      switch (payload.action) {
       case "manager_approve": {
         requireRole(auth, ["MANAGER", "FINANCE_ADMIN"]);
         if (tx.status !== "PENDING") {
@@ -807,107 +748,118 @@ export async function changeTransactionStatus(
         });
         break;
       }
-      case "execute": {
-        requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
-        if (tx.status !== "APPROVED") {
-          throw new AppError("Only APPROVED transaction can be executed", "UNPROCESSABLE_ENTITY");
-        }
+        case "execute": {
+          requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+          if (!idempotencyKey) {
+            throw new AppError("idempotency-key header is required for execute action", "INVALID_INPUT");
+          }
 
-        const approvedSteps = await db.approval.findMany({
-          where: { transactionId: tx.id, status: "APPROVED" },
-          select: { step: true },
-        });
+          if (tx.status !== "APPROVED") {
+            throw new AppError("Only APPROVED transaction can be executed", "UNPROCESSABLE_ENTITY");
+          }
 
-        const stepSet = new Set(approvedSteps.map((item) => item.step));
-        if (!stepSet.has(1) || !stepSet.has(2)) {
-          throw new AppError("Two-step approval is required before execute", "UNPROCESSABLE_ENTITY");
-        }
+          const approvedSteps = await db.approval.findMany({
+            where: { transactionId: tx.id, status: "APPROVED" },
+            select: { step: true },
+          });
 
-        const available = calculateAvailable(amount, reserved, used);
-        if (compareMoney(available, decimalToString(tx.amount)) < 0) {
-          throw new AppError("Insufficient available budget at execute", "UNPROCESSABLE_ENTITY");
-        }
+          const stepSet = new Set(approvedSteps.map((item) => item.step));
+          if (!stepSet.has(1) || !stepSet.has(2)) {
+            throw new AppError("Two-step approval is required before execute", "UNPROCESSABLE_ENTITY");
+          }
 
-        const nextReserved = addMoney(reserved, `-${decimalToString(tx.amount)}`);
-        const nextUsed = addMoney(used, decimalToString(tx.amount));
+          const available = calculateAvailable(amount, reserved, used);
+          if (compareMoney(available, decimalToString(tx.amount)) < 0) {
+            throw new AppError("Insufficient available budget at execute", "UNPROCESSABLE_ENTITY");
+          }
 
-        await db.budget.update({
-          where: { id: budget.id },
-          data: {
-            reserved: nextReserved,
-            used: nextUsed,
-          },
-        });
+          const nextReserved = addMoney(reserved, `-${decimalToString(tx.amount)}`);
+          const nextUsed = addMoney(used, decimalToString(tx.amount));
 
-        const ledger = await db.ledgerEntry.create({
-          data: {
-            entryCode: `LED-EXPENSE-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            type: "EXPENSE",
-            amount: decimalToString(tx.amount),
-            currency: tx.currency,
-            referenceType: "TRANSACTION",
-            referenceId: tx.id,
-            createdById: auth.userId,
-            fxCurrency: tx.fxCurrency,
-            fxAmount: tx.fxAmount,
-            fxRate: tx.fxRate,
-            baseCurrency: tx.baseCurrency,
-            baseAmount: tx.baseAmount,
-            fxRateProvider: tx.fxRateProvider,
-            fxRateFetchedAt: tx.fxRateFetchedAt,
-            metadata: {
-              transactionCode: tx.code,
-              budgetId: budget.id,
+          await db.budget.update({
+            where: { id: budget.id },
+            data: {
+              reserved: nextReserved,
+              used: nextUsed,
             },
-          },
-        });
+          });
 
-        const posting = await createCashbookPostingForExecution(db, tx.id, decimalToString(tx.amount), "OUT");
+          const idempotencyCode = buildIdempotencyCodeSuffix(`${tx.id}:${idempotencyKey}`);
 
-        await db.auditLog.create({
-          data: {
-            actorId: auth.userId,
-            action: "TRANSACTION_EXECUTE",
-            entityType: "TRANSACTION",
-            entityId: tx.id,
-            correlationId,
-            payload: {
-              ledgerEntryId: ledger.id,
-              cashbookPostingId: posting.postingId,
-              cashbookAccountId: posting.accountId,
+          const ledger = await db.ledgerEntry.create({
+            data: {
+              entryCode: `LED-EXPENSE-${idempotencyCode}`,
+              type: "EXPENSE",
+              amount: decimalToString(tx.amount),
+              currency: tx.currency,
+              referenceType: "TRANSACTION",
+              referenceId: tx.id,
+              createdById: auth.userId,
+              metadata: {
+                transactionCode: tx.code,
+                budgetId: budget.id,
+                idempotencyKey,
+              },
             },
-          },
-        });
+          });
 
-        nextStatus = "EXECUTED";
-        break;
+          const posting = await createCashbookPostingForExecution(db, tx.id, decimalToString(tx.amount), "OUT");
+
+          await db.auditLog.create({
+            data: {
+              actorId: auth.userId,
+              action: "TRANSACTION_EXECUTE",
+              entityType: "TRANSACTION",
+              entityId: tx.id,
+              correlationId,
+              payload: {
+                ledgerEntryId: ledger.id,
+                cashbookPostingId: posting.postingId,
+                cashbookAccountId: posting.accountId,
+                idempotencyKey,
+              },
+            },
+          });
+
+          nextStatus = "EXECUTED";
+          break;
+        }
+        default:
+          throw new AppError("Unsupported action", "INVALID_INPUT");
       }
-      default:
-        throw new AppError("Unsupported action", "INVALID_INPUT");
+
+      const updated = await db.transaction.update({
+        where: { id: tx.id },
+        data: { status: nextStatus },
+      });
+
+      await db.auditLog.create({
+        data: {
+          actorId: auth.userId,
+          action: "TRANSACTION_STATUS_CHANGE",
+          entityType: "TRANSACTION",
+          entityId: tx.id,
+          correlationId,
+          payload: {
+            fromStatus: tx.status,
+            toStatus: updated.status,
+            action: payload.action,
+            reason: payload.reason ?? null,
+            note: payload.note ?? null,
+          },
+        },
+      });
+
+      return toTransactionView(updated);
+    });
+  } catch (error) {
+    if (payload.action === "execute" && idempotencyKey && isUniqueConstraintError(error)) {
+      const existing = await prisma.transaction.findUnique({ where: { id } });
+      if (existing && existing.status === "EXECUTED") {
+        return toTransactionView(existing);
+      }
     }
 
-    const updated = await db.transaction.update({
-      where: { id: tx.id },
-      data: { status: nextStatus },
-    });
-
-    await db.auditLog.create({
-      data: {
-        actorId: auth.userId,
-        action: "TRANSACTION_STATUS_CHANGE",
-        entityType: "TRANSACTION",
-        entityId: tx.id,
-        correlationId,
-        payload: {
-          fromStatus: tx.status,
-          toStatus: updated.status,
-          action: payload.action,
-          reason: payload.reason ?? null,
-          note: payload.note ?? null,
-        },
-      },
-    });
-
-    return toTransactionView(updated);
-  });
+    throw error;
+  }
 }

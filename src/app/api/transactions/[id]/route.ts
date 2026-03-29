@@ -21,7 +21,6 @@ export async function GET(request: NextRequest, ctx: Params) {
 
 export async function PATCH(request: NextRequest, ctx: Params) {
   const correlationId = getCorrelationId(request);
-  const idempotencyKey = request.headers.get("idempotency-key");
 
   try {
     const auth = await requireAuth(request);
@@ -34,7 +33,7 @@ export async function PATCH(request: NextRequest, ctx: Params) {
       reason?: string;
     }>(request);
 
-    const tx = await changeTransactionStatus(auth, id, body, correlationId, idempotencyKey);
+    const tx = await changeTransactionStatus(auth, id, body, correlationId);
     return ok(tx, {});
   } catch (unknownError) {
     return handleApiError(request, unknownError);

@@ -44,10 +44,6 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
     roles: ALL_ROLES,
   },
   {
-    matcher: /^\/api\/cashbook(?:\/.*)?$/,
-    roles: ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
-  },
-  {
     matcher: /^\/api\/approvals(?:\/.*)?$/,
     roles: ANALYST_ROLES,
   },

@@ -44,10 +44,6 @@ Thumbs.db
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 
-# Runtime uploads
-src/public/uploads/transactions/*
-!src/public/uploads/transactions/.gitkeep
-
 # Replit
 .cache/
 .local/
@@ -57,3 +53,5 @@ src/public/uploads/transactions/*
 **/.next
 out
 .env
+.brv
+*.brv

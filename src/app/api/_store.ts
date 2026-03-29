@@ -1,22 +1,11 @@
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
-export type ApprovalRequestStatus = "NOT_YET" | "PENDING" | "APPROVED" | "NOT_APPROVED" | "EXECUTE" | "NOT_EXECUTE";
-export type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 export type Department = {
   id: number;
   name: string;
   code: string;
   budgetAllocated: number;
-};
-
-export type Budget = {
-  id: number;
-  departmentId: number;
-  period: string; // YYYY-MM format
-  amount: number;
-  reserved: number; // Số tiền đã được "giữ chỗ" (approved nhưng chưa chi)
-  used: number;     // Số tiền đã thực chi
 };
 
 export type Transaction = {
@@ -33,81 +22,20 @@ export type Transaction = {
   createdAt: string;
 };
 
-export type AppUser = {
-  id: number;
-  fullName: string;
-  email: string;
-  role: UserRole;
-};
-
-export type ApprovalRequest = {
-  id: number;
-  requestCode: string;
-  title: string;
-  description: string | null;
-  amount: number;
-  departmentId: number | null;
-  departmentName: string | null;
-  requesterId: number;
-  requesterName: string;
-  approverId: number | null;
-  approverName: string | null;
-  accountantId: number | null;
-  accountantName: string | null;
-  status: ApprovalRequestStatus;
-  rejectionReason: string | null;
-  notExecuteReason: string | null;
-  executedAmount: number | null;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  rejectedAt: string | null;
-  executedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type Notification = {
-  id: number;
-  recipientId: number;
-  type: string;
-  title: string;
-  message: string;
-  referenceType: string | null;
-  referenceId: number | null;
-  isRead: boolean;
-  createdAt: string;
-};
-
 export type ViberStore = {
   nextTxId: number;
   nextDeptId: number;
-  nextApprovalId: number;
-  nextNotificationId: number;
-  nextBudgetId: number;
   departments: Department[];
-  budgets: Budget[];
   transactions: Transaction[];
-  users: AppUser[];
-  approvalRequests: ApprovalRequest[];
-  notifications: Notification[];
-  currentUserId: number;
 };
 
 function createSeedStore(): ViberStore {
-  const currentPeriod = "2026-03"; // Tháng hiện tại
   return {
     nextTxId: 3,
     nextDeptId: 3,
-    nextApprovalId: 1,
-    nextNotificationId: 1,
-    nextBudgetId: 3,
     departments: [
       { id: 1, name: "Engineering", code: "ENG", budgetAllocated: 250000 },
       { id: 2, name: "Marketing", code: "MKT", budgetAllocated: 150000 },
-    ],
-    budgets: [
-      { id: 1, departmentId: 1, period: currentPeriod, amount: 250000, reserved: 0, used: 0 },
-      { id: 2, departmentId: 2, period: currentPeriod, amount: 150000, reserved: 0, used: 0 },
     ],
     transactions: [
       {
@@ -137,17 +65,6 @@ function createSeedStore(): ViberStore {
         createdAt: new Date().toISOString(),
       },
     ],
-    users: [
-      { id: 1, fullName: "Nguyen Van A", email: "nva@company.com", role: "EMPLOYEE" },
-      { id: 2, fullName: "Tran Thi B", email: "ttb@company.com", role: "EMPLOYEE" },
-      { id: 3, fullName: "Le Van C", email: "lvc@company.com", role: "MANAGER" },
-      { id: 4, fullName: "Pham Thi D", email: "ptd@company.com", role: "ACCOUNTANT" },
-      { id: 5, fullName: "Hoang Van E", email: "hve@company.com", role: "ACCOUNTANT" },
-      { id: 6, fullName: "Do Thi F", email: "dtf@company.com", role: "FINANCE_ADMIN" },
-    ],
-    approvalRequests: [],
-    notifications: [],
-    currentUserId: 1,
   };
 }
 
@@ -166,29 +83,13 @@ export function getStore(): ViberStore {
 
   const store = g.__VIBER_STORE__ as Partial<ViberStore>;
   if (!Array.isArray(store.departments)) store.departments = [];
-  if (!Array.isArray(store.budgets)) store.budgets = [];
   if (!Array.isArray(store.transactions)) store.transactions = [];
-  if (!Array.isArray(store.users)) store.users = createSeedStore().users;
-  if (!Array.isArray(store.approvalRequests)) store.approvalRequests = [];
-  if (!Array.isArray(store.notifications)) store.notifications = [];
 
   if (typeof store.nextDeptId !== "number") {
     store.nextDeptId = computeNextId(store.departments.map((d: any) => Number(d?.id ?? 0)));
   }
   if (typeof store.nextTxId !== "number") {
     store.nextTxId = computeNextId(store.transactions.map((t: any) => Number(t?.id ?? 0)));
-  }
-  if (typeof store.nextApprovalId !== "number") {
-    store.nextApprovalId = computeNextId(store.approvalRequests.map((a: any) => Number(a?.id ?? 0)));
-  }
-  if (typeof store.nextNotificationId !== "number") {
-    store.nextNotificationId = computeNextId(store.notifications.map((n: any) => Number(n?.id ?? 0)));
-  }
-  if (typeof store.nextBudgetId !== "number") {
-    store.nextBudgetId = computeNextId(store.budgets.map((b: any) => Number(b?.id ?? 0)));
-  }
-  if (typeof store.currentUserId !== "number") {
-    store.currentUserId = 1;
   }
 
   g.__VIBER_STORE__ = store;

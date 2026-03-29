@@ -1,4 +1,4 @@
-import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 import { listApprovals, syncExpenseToApprovals } from "@/modules/approval";
 import { handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";

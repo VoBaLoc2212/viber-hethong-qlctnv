@@ -1,12 +1,13 @@
 import type { NextRequest } from "next/server";
 
 import { createBudget, listBudgets } from "@/modules/budgeting";
-import { created, handleApiError, ok, readJsonBody, requireAuth } from "@/modules/shared";
+import { created, handleApiError, ok, readJsonBody, requireAuth, requireRole } from "@/modules/shared";
 import { getCorrelationId } from "@/modules/shared/http/request";
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["FINANCE_ADMIN", "MANAGER", "ACCOUNTANT", "AUDITOR"]);
     const { searchParams } = new URL(request.url);
 
     const result = await listBudgets(auth, {
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["FINANCE_ADMIN"]);
     const body = await readJsonBody<{
       departmentId?: string;
       period?: string;

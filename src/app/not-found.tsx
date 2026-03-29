@@ -8,11 +8,11 @@ export default function NotFound() {
         <CardContent className="pt-6">
           <div className="flex mb-4 gap-2 items-center">
             <AlertCircle className="h-8 w-8 text-destructive" />
-            <h1 className="text-2xl font-bold">404 Page Not Found</h1>
+            <h1 className="text-2xl font-bold">404 Không tìm thấy trang</h1>
           </div>
 
           <p className="mt-4 text-sm text-muted-foreground">
-            Did you forget to add the page to the router?
+            Có thể bạn chưa thêm trang này vào bộ định tuyến.
           </p>
         </CardContent>
       </Card>

@@ -1,4 +1,6 @@
-import type { Prisma, TransactionStatus, TransactionType } from "@prisma/client";
+import { createHash } from "node:crypto";
+
+import { Prisma, type TransactionStatus, type TransactionType } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
 import {
@@ -13,6 +15,14 @@ import { AppError } from "@/modules/shared/errors/app-error";
 
 function decimalToString(value: Prisma.Decimal): string {
   return value.toFixed(2);
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+function buildIdempotencyCodeSuffix(value: string) {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12).toUpperCase();
 }
 
 function ensureExpenseStatus(status: TransactionStatus) {
@@ -134,6 +144,7 @@ type ListTransactionsFilter = {
   status?: TransactionStatus;
   departmentId?: string;
   budgetId?: string;
+  q?: string;
 };
 
 export async function listTransactions(auth: AuthContext, filter: ListTransactionsFilter) {
@@ -143,11 +154,21 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
   const limit = Number.isFinite(filter.limit) && filter.limit > 0 ? Math.min(filter.limit, 100) : 20;
   const skip = (page - 1) * limit;
 
+  const keyword = filter.q?.trim().slice(0, 100);
+
   const where: Prisma.TransactionWhereInput = {
     type: filter.type,
     status: filter.status,
     departmentId: filter.departmentId,
     budgetId: filter.budgetId,
+    ...(keyword
+      ? {
+          OR: [
+            { code: { contains: keyword, mode: "insensitive" } },
+            { description: { contains: keyword, mode: "insensitive" } },
+          ],
+        }
+      : {}),
   };
 
   const [total, rows] = await Promise.all([
@@ -496,41 +517,62 @@ export async function changeTransactionStatus(
   id: string,
   payload: ChangeStatusPayload,
   correlationId: string,
+  idempotencyKey?: string | null,
 ) {
   if (!payload.action) {
     throw new AppError("action is required", "INVALID_INPUT");
   }
 
-  return prisma.$transaction(async (db) => {
-    const tx = await db.transaction.findUnique({ where: { id } });
-    if (!tx) {
-      throw new AppError("Transaction not found", "NOT_FOUND");
-    }
+  try {
+    return await prisma.$transaction(async (db) => {
+      const tx = await db.transaction.findUnique({ where: { id } });
+      if (!tx) {
+        throw new AppError("Transaction not found", "NOT_FOUND");
+      }
 
-    if (tx.status === "EXECUTED" || tx.status === "REVERSED") {
-      throw new AppError("Closed transaction is immutable", "CONFLICT");
-    }
+      if (payload.action === "execute" && idempotencyKey) {
+        const existingExecution = await db.auditLog.findFirst({
+          where: {
+            action: "TRANSACTION_EXECUTE",
+            entityType: "TRANSACTION",
+            entityId: tx.id,
+            payload: {
+              path: ["idempotencyKey"],
+              equals: idempotencyKey,
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        });
 
-    if (tx.type !== "EXPENSE") {
-      throw new AppError("Only EXPENSE transactions are in approval flow", "UNPROCESSABLE_ENTITY");
-    }
+        if (existingExecution) {
+          return toTransactionView(tx);
+        }
+      }
 
-    if (!tx.budgetId) {
-      throw new AppError("Missing budget reference", "CONFLICT");
-    }
+      if (tx.status === "EXECUTED" || tx.status === "REVERSED") {
+        throw new AppError("Closed transaction is immutable", "CONFLICT");
+      }
 
-    const budget = await db.budget.findUnique({ where: { id: tx.budgetId } });
-    if (!budget) {
-      throw new AppError("Budget not found", "NOT_FOUND");
-    }
+      if (tx.type !== "EXPENSE") {
+        throw new AppError("Only EXPENSE transactions are in approval flow", "UNPROCESSABLE_ENTITY");
+      }
 
-    const amount = decimalToString(budget.amount);
-    const reserved = decimalToString(budget.reserved);
-    const used = decimalToString(budget.used);
+      if (!tx.budgetId) {
+        throw new AppError("Missing budget reference", "CONFLICT");
+      }
 
-    let nextStatus: TransactionStatus;
+      const budget = await db.budget.findUnique({ where: { id: tx.budgetId } });
+      if (!budget) {
+        throw new AppError("Budget not found", "NOT_FOUND");
+      }
 
-    switch (payload.action) {
+      const amount = decimalToString(budget.amount);
+      const reserved = decimalToString(budget.reserved);
+      const used = decimalToString(budget.used);
+
+      let nextStatus: TransactionStatus;
+
+      switch (payload.action) {
       case "manager_approve": {
         requireRole(auth, ["MANAGER", "FINANCE_ADMIN"]);
         if (tx.status !== "PENDING") {
@@ -717,100 +759,118 @@ export async function changeTransactionStatus(
         });
         break;
       }
-      case "execute": {
-        requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
-        if (tx.status !== "APPROVED") {
-          throw new AppError("Only APPROVED transaction can be executed", "UNPROCESSABLE_ENTITY");
-        }
+        case "execute": {
+          requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+          if (!idempotencyKey) {
+            throw new AppError("idempotency-key header is required for execute action", "INVALID_INPUT");
+          }
 
-        const approvedSteps = await db.approval.findMany({
-          where: { transactionId: tx.id, status: "APPROVED" },
-          select: { step: true },
-        });
+          if (tx.status !== "APPROVED") {
+            throw new AppError("Only APPROVED transaction can be executed", "UNPROCESSABLE_ENTITY");
+          }
 
-        const stepSet = new Set(approvedSteps.map((item) => item.step));
-        if (!stepSet.has(1) || !stepSet.has(2)) {
-          throw new AppError("Two-step approval is required before execute", "UNPROCESSABLE_ENTITY");
-        }
+          const approvedSteps = await db.approval.findMany({
+            where: { transactionId: tx.id, status: "APPROVED" },
+            select: { step: true },
+          });
 
-        const available = calculateAvailable(amount, reserved, used);
-        if (compareMoney(available, decimalToString(tx.amount)) < 0) {
-          throw new AppError("Insufficient available budget at execute", "UNPROCESSABLE_ENTITY");
-        }
+          const stepSet = new Set(approvedSteps.map((item) => item.step));
+          if (!stepSet.has(1) || !stepSet.has(2)) {
+            throw new AppError("Two-step approval is required before execute", "UNPROCESSABLE_ENTITY");
+          }
 
-        const nextReserved = addMoney(reserved, `-${decimalToString(tx.amount)}`);
-        const nextUsed = addMoney(used, decimalToString(tx.amount));
+          const available = calculateAvailable(amount, reserved, used);
+          if (compareMoney(available, decimalToString(tx.amount)) < 0) {
+            throw new AppError("Insufficient available budget at execute", "UNPROCESSABLE_ENTITY");
+          }
 
-        await db.budget.update({
-          where: { id: budget.id },
-          data: {
-            reserved: nextReserved,
-            used: nextUsed,
-          },
-        });
+          const nextReserved = addMoney(reserved, `-${decimalToString(tx.amount)}`);
+          const nextUsed = addMoney(used, decimalToString(tx.amount));
 
-        const ledger = await db.ledgerEntry.create({
-          data: {
-            entryCode: `LED-EXPENSE-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            type: "EXPENSE",
-            amount: decimalToString(tx.amount),
-            currency: tx.currency,
-            referenceType: "TRANSACTION",
-            referenceId: tx.id,
-            createdById: auth.userId,
-            metadata: {
-              transactionCode: tx.code,
-              budgetId: budget.id,
+          await db.budget.update({
+            where: { id: budget.id },
+            data: {
+              reserved: nextReserved,
+              used: nextUsed,
             },
-          },
-        });
+          });
 
-        const posting = await createCashbookPostingForExecution(db, tx.id, decimalToString(tx.amount), "OUT");
+          const idempotencyCode = buildIdempotencyCodeSuffix(`${tx.id}:${idempotencyKey}`);
 
-        await db.auditLog.create({
-          data: {
-            actorId: auth.userId,
-            action: "TRANSACTION_EXECUTE",
-            entityType: "TRANSACTION",
-            entityId: tx.id,
-            correlationId,
-            payload: {
-              ledgerEntryId: ledger.id,
-              cashbookPostingId: posting.postingId,
-              cashbookAccountId: posting.accountId,
+          const ledger = await db.ledgerEntry.create({
+            data: {
+              entryCode: `LED-EXPENSE-${idempotencyCode}`,
+              type: "EXPENSE",
+              amount: decimalToString(tx.amount),
+              currency: tx.currency,
+              referenceType: "TRANSACTION",
+              referenceId: tx.id,
+              createdById: auth.userId,
+              metadata: {
+                transactionCode: tx.code,
+                budgetId: budget.id,
+                idempotencyKey,
+              },
             },
-          },
-        });
+          });
 
-        nextStatus = "EXECUTED";
-        break;
+          const posting = await createCashbookPostingForExecution(db, tx.id, decimalToString(tx.amount), "OUT");
+
+          await db.auditLog.create({
+            data: {
+              actorId: auth.userId,
+              action: "TRANSACTION_EXECUTE",
+              entityType: "TRANSACTION",
+              entityId: tx.id,
+              correlationId,
+              payload: {
+                ledgerEntryId: ledger.id,
+                cashbookPostingId: posting.postingId,
+                cashbookAccountId: posting.accountId,
+                idempotencyKey,
+              },
+            },
+          });
+
+          nextStatus = "EXECUTED";
+          break;
+        }
+        default:
+          throw new AppError("Unsupported action", "INVALID_INPUT");
       }
-      default:
-        throw new AppError("Unsupported action", "INVALID_INPUT");
+
+      const updated = await db.transaction.update({
+        where: { id: tx.id },
+        data: { status: nextStatus },
+      });
+
+      await db.auditLog.create({
+        data: {
+          actorId: auth.userId,
+          action: "TRANSACTION_STATUS_CHANGE",
+          entityType: "TRANSACTION",
+          entityId: tx.id,
+          correlationId,
+          payload: {
+            fromStatus: tx.status,
+            toStatus: updated.status,
+            action: payload.action,
+            reason: payload.reason ?? null,
+            note: payload.note ?? null,
+          },
+        },
+      });
+
+      return toTransactionView(updated);
+    });
+  } catch (error) {
+    if (payload.action === "execute" && idempotencyKey && isUniqueConstraintError(error)) {
+      const existing = await prisma.transaction.findUnique({ where: { id } });
+      if (existing && existing.status === "EXECUTED") {
+        return toTransactionView(existing);
+      }
     }
 
-    const updated = await db.transaction.update({
-      where: { id: tx.id },
-      data: { status: nextStatus },
-    });
-
-    await db.auditLog.create({
-      data: {
-        actorId: auth.userId,
-        action: "TRANSACTION_STATUS_CHANGE",
-        entityType: "TRANSACTION",
-        entityId: tx.id,
-        correlationId,
-        payload: {
-          fromStatus: tx.status,
-          toStatus: updated.status,
-          action: payload.action,
-          reason: payload.reason ?? null,
-          note: payload.note ?? null,
-        },
-      },
-    });
-
-    return toTransactionView(updated);
-  });
+    throw error;
+  }
 }

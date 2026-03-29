@@ -9,6 +9,8 @@ import {
 
 import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
 
+type QueryHookOptions<TData> = Omit<UseQueryOptions<TData, Error, TData, readonly unknown[]>, "queryKey" | "queryFn">;
+
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -89,6 +91,30 @@ export type DashboardKpis = {
   totalIncome: number;
   transactionCount: number;
   pendingCount: number;
+  currency?: "VND" | "USD";
+};
+
+export type FxRate = {
+  id: string;
+  fromCurrency: "USD" | "VND";
+  toCurrency: "USD" | "VND";
+  rate: string;
+  rateDate: string;
+  source: string;
+  fetchedAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GetFxRatesParams = {
+  page?: number;
+  limit?: number;
+  fromCurrency?: string;
+  toCurrency?: string;
+  source?: string;
+  rateDateFrom?: string;
+  rateDateTo?: string;
+  q?: string;
 };
 
 export type ExpensesByMonthRow = {
@@ -120,15 +146,15 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(message);
   }
 
-  const payload = (await res.json()) as { data?: T } | T;
-  if (payload && typeof payload === "object" && "data" in (payload as any)) {
+  const payload = (await res.json()) as { data?: T; meta?: unknown } | T;
+  if (payload && typeof payload === "object" && "data" in (payload as any) && "meta" in (payload as any)) {
     return (payload as { data: T }).data;
   }
 
   return payload as T;
 }
 
-export function useGetDepartments(options?: UseQueryOptions<Department[]>) {
+export function useGetDepartments(options?: QueryHookOptions<Department[]>) {
   return useQuery({
     queryKey: ["/api/departments"],
     queryFn: async () => {
@@ -154,15 +180,17 @@ export type GetTransactionsParams = {
   type?: TransactionType;
   status?: TransactionStatus;
   departmentId?: number;
+  q?: string;
 };
 
-export function useGetTransactions(params: GetTransactionsParams = {}, options?: UseQueryOptions<Paginated<Transaction>>) {
+export function useGetTransactions(params: GetTransactionsParams = {}, options?: QueryHookOptions<Paginated<Transaction>>) {
   const search = new URLSearchParams();
   if (params.page) search.set("page", String(params.page));
   if (params.limit) search.set("limit", String(params.limit));
   if (params.type) search.set("type", params.type);
   if (params.status) search.set("status", params.status);
   if (params.departmentId != null) search.set("departmentId", String(params.departmentId));
+  if (params.q?.trim()) search.set("q", params.q.trim());
   const url = `/api/transactions${search.toString() ? `?${search.toString()}` : ""}`;
 
   return useQuery({
@@ -208,7 +236,7 @@ export function useUpdateTransactionStatus(opts?: {
   });
 }
 
-export function useGetDashboardKpis(options?: UseQueryOptions<DashboardKpis>) {
+export function useGetDashboardKpis(options?: QueryHookOptions<DashboardKpis>) {
   return useQuery({
     queryKey: ["/api/dashboard/kpis"],
     queryFn: () => fetchJson<DashboardKpis>("/api/dashboard/kpis"),
@@ -216,11 +244,11 @@ export function useGetDashboardKpis(options?: UseQueryOptions<DashboardKpis>) {
   });
 }
 
-export function useGetExpensesByMonth(options?: UseQueryOptions<ExpensesByMonthRow[]>) {
+export function useGetExpensesByMonth(options?: QueryHookOptions<ExpensesByMonthRow[]>) {
   return useQuery({
     queryKey: ["/api/dashboard/expenses-by-month"],
     queryFn: async () => {
-      const result = await fetchJson<{ rows: ExpensesByMonthRow[] }>("/api/dashboard/expenses-by-month");
+      const result = await fetchJson<{ rows: ExpensesByMonthRow[]; currency?: "VND" | "USD" }>("/api/dashboard/expenses-by-month");
       return result.rows;
     },
     ...options,
@@ -229,7 +257,7 @@ export function useGetExpensesByMonth(options?: UseQueryOptions<ExpensesByMonthR
 
 // ─── Auth / User ───
 
-export function useGetCurrentUser(options?: UseQueryOptions<AppUser>) {
+export function useGetCurrentUser(options?: QueryHookOptions<AppUser>) {
   return useQuery({
     queryKey: ["/api/auth"],
     queryFn: () => fetchJson<AppUser>("/api/auth"),
@@ -262,7 +290,7 @@ export function useLogout(opts?: {
   });
 }
 
-export function useGetUsers(role?: UserRole, options?: UseQueryOptions<AppUser[]>) {
+export function useGetUsers(role?: UserRole, options?: QueryHookOptions<AppUser[]>) {
   const url = role ? `/api/auth/users?role=${role}` : "/api/auth/users";
   return useQuery({
     queryKey: ["/api/auth/users", role],
@@ -313,7 +341,7 @@ export function useApprovalAction(opts?: {
 
 // ─── Notifications ───
 
-export function useGetNotifications(options?: Omit<UseQueryOptions<NotificationsResponse>, 'queryKey' | 'queryFn'>) {
+export function useGetNotifications(options?: QueryHookOptions<NotificationsResponse>) {
   return useQuery({
     queryKey: ["/api/notifications"],
     queryFn: () => fetchJson<NotificationsResponse>("/api/notifications"),
@@ -359,7 +387,7 @@ export type BudgetAvailable = {
 
 export function useBudgetAvailable(
   params: { departmentId?: number; period?: string },
-  options?: UseQueryOptions<BudgetAvailable>,
+  options?: QueryHookOptions<BudgetAvailable>,
 ) {
   const search = new URLSearchParams();
   if (params.departmentId != null) search.set("departmentId", String(params.departmentId));
@@ -371,5 +399,74 @@ export function useBudgetAvailable(
     queryFn: () => fetchJson<BudgetAvailable>(url),
     enabled: !!params.departmentId,
     ...options,
+  });
+}
+
+export function useGetFxRates(params: GetFxRatesParams = {}, options?: QueryHookOptions<Paginated<FxRate>>) {
+  const search = new URLSearchParams();
+  if (params.page) search.set("page", String(params.page));
+  if (params.limit) search.set("limit", String(params.limit));
+  if (params.fromCurrency?.trim()) search.set("fromCurrency", params.fromCurrency.trim().toUpperCase());
+  if (params.toCurrency?.trim()) search.set("toCurrency", params.toCurrency.trim().toUpperCase());
+  if (params.source?.trim()) search.set("source", params.source.trim());
+  if (params.rateDateFrom?.trim()) search.set("rateDateFrom", params.rateDateFrom.trim());
+  if (params.rateDateTo?.trim()) search.set("rateDateTo", params.rateDateTo.trim());
+  if (params.q?.trim()) search.set("q", params.q.trim());
+
+  const url = `/api/fx-rates${search.toString() ? `?${search.toString()}` : ""}`;
+
+  return useQuery({
+    queryKey: ["/api/fx-rates", params],
+    queryFn: () => fetchJson<Paginated<FxRate>>(url),
+    ...options,
+  });
+}
+
+export function useCreateFxRate(opts?: {
+  mutation?: UseMutationOptions<
+    FxRate,
+    Error,
+    {
+      data: {
+        fromCurrency: string;
+        toCurrency: string;
+        rateDate: string;
+        rate: string;
+        source?: string;
+      };
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ data }) =>
+      fetchJson<FxRate>("/api/fx-rates", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+export function useUpdateFxRate(opts?: {
+  mutation?: UseMutationOptions<
+    FxRate,
+    Error,
+    {
+      id: string;
+      data: {
+        rate?: string;
+        source?: string;
+        rateDate?: string;
+      };
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      fetchJson<FxRate>(`/api/fx-rates/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
   });
 }

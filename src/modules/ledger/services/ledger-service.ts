@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
-import { addMoney, calculateAvailable, compareMoney, type AuthContext, requireRole, writeAuditLog } from "@/modules/shared";
+import { addMoney, assertNotAuditorForMutation, calculateAvailable, compareMoney, type AuthContext, requireRole, writeAuditLog } from "@/modules/shared";
 import { AppError } from "@/modules/shared/errors/app-error";
 
 type LedgerFilter = {
@@ -102,6 +102,7 @@ export async function reverseLedgerEntry(
   correlationId: string,
 ) {
   requireRole(auth, ["FINANCE_ADMIN", "ACCOUNTANT"]);
+  assertNotAuditorForMutation(auth);
 
   if (!idempotencyKey) {
     throw new AppError("idempotency-key header is required", "INVALID_INPUT");

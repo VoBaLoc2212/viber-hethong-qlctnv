@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiLogin } from "@/lib/api";
+import { getRoleLabel } from "@/lib/ui-labels";
 import type { AuthUser } from "@/lib/api";
 
 type AuthPanelProps = {
@@ -53,7 +54,7 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
         <CardHeader className="space-y-2">
           <CardTitle>Đăng nhập</CardTitle>
           <CardDescription>
-            Đang đăng nhập: <strong>{currentUser.fullName}</strong> ({currentUser.role})
+            Đang đăng nhập: <strong>{currentUser.fullName}</strong> ({getRoleLabel(currentUser.role)})
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -87,7 +88,7 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
           <TabsContent value="login" className="mt-5">
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="auth-username">Username</Label>
+                <Label htmlFor="auth-username">Tên đăng nhập</Label>
                 <Input
                   id="auth-username"
                   value={username}
@@ -97,7 +98,7 @@ export function AuthPanel({ token, currentUser, onAuthenticated, onLogout }: Aut
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="auth-password">Password</Label>
+                <Label htmlFor="auth-password">Mật khẩu</Label>
                 <Input
                   id="auth-password"
                   type="password"

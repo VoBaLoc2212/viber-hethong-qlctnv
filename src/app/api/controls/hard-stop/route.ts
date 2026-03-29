@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { configureHardStop } from "@/modules/budgeting";
-import { handleApiError, ok, readJsonBody, requireAuth } from "@/modules/shared";
+import { handleApiError, ok, readJsonBody, requireAuth, requireRole } from "@/modules/shared";
 import { getCorrelationId } from "@/modules/shared/http/request";
 
 export async function POST(request: NextRequest) {
@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["FINANCE_ADMIN"]);
     const body = await readJsonBody<{
       budgetId?: string | null;
       enabled?: boolean;

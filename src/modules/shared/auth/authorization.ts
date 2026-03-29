@@ -55,6 +55,12 @@ export function requireRole(auth: AuthContext, allowedRoles: UserRole[]) {
   }
 }
 
+export function assertNotAuditorForMutation(auth: AuthContext) {
+  if (auth.role === "AUDITOR") {
+    throw new AppError("Forbidden", "FORBIDDEN");
+  }
+}
+
 export function getJwtExpiresIn() {
   return requireJwtExpiresIn();
 }

@@ -44,10 +44,6 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
     roles: ALL_ROLES,
   },
   {
-    matcher: /^\/api\/cashbook(?:\/.*)?$/,
-    roles: ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
-  },
-  {
     matcher: /^\/api\/approvals(?:\/.*)?$/,
     roles: ANALYST_ROLES,
   },
@@ -96,7 +92,7 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
 export const NAV_ITEMS: Array<{
   href: string;
   label: string;
-  icon: "dashboard" | "transactions" | "budgeting" | "budgets" | "reports" | "security" | "users" | "assistant" | "fxRates";
+  icon: "dashboard" | "transactions" | "budgeting" | "budgets" | "reports" | "security" | "users" | "assistant" | "fxRates" | "approvals";
   roles: UserRole[];
 }> = [
   {
@@ -121,6 +117,12 @@ export const NAV_ITEMS: Array<{
     href: "/budgets",
     label: "Ngân sách",
     icon: "budgets",
+    roles: ANALYST_ROLES,
+  },
+  {
+    href: "/approvals",
+    label: "Quy trình duyệt chi",
+    icon: "approvals",
     roles: ANALYST_ROLES,
   },
   {

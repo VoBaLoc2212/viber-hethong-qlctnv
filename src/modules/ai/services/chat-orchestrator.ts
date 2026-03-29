@@ -45,7 +45,10 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
   if (!resolution) {
     const shouldTryText2Sql = intent !== "GREETING" && isLikelyServiceDataQuestion(message);
 
-    if (shouldTryText2Sql) {
+    const rag = await resolveByRag(message, input.auth, { conversationMessages });
+    const ragLooksInsufficient = /chưa đủ|không đủ|chưa có nguồn|xem hướng dẫn|vào trang help/i.test(rag.answer);
+
+    if (shouldTryText2Sql && ragLooksInsufficient) {
       try {
         const sql = await resolveByText2Sql(input.auth, message);
         resolution = {
@@ -57,17 +60,15 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
           suggestedActions: ["Thêm bộ lọc thời gian để kết quả chính xác hơn"],
         };
       } catch {
-        const rag = await resolveByRag(message, input.auth, { conversationMessages });
         resolution = {
           intent,
           routeUsed: "RAG",
           rawAnswer: rag.answer,
           citations: rag.citations,
-          suggestedActions: ["Đặt câu hỏi cụ thể hơn theo kỳ hoặc phòng ban"],
+          suggestedActions: ["Mô tả rõ ngữ cảnh để mình hỗ trợ chính xác hơn"],
         };
       }
     } else {
-      const rag = await resolveByRag(message, input.auth, { conversationMessages });
       resolution = {
         intent,
         routeUsed: "RAG",

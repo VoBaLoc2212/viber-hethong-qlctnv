@@ -13,16 +13,14 @@ type RequestOptions = {
 };
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
-
   const response = await fetch(path, {
     method: options.method ?? "GET",
     headers: {
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      "Content-Type": "application/json",
       ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
       ...(options.headers ?? {}),
     },
-    body: options.body ? (isFormData ? (options.body as FormData) : JSON.stringify(options.body)) : undefined,
+    body: options.body ? JSON.stringify(options.body) : undefined,
     cache: "no-store",
   });
 

@@ -15,8 +15,6 @@ enum UserRole {
   AUDITOR
 }
 
-
-
 enum TransactionType {
   INCOME
   EXPENSE
@@ -113,9 +111,9 @@ model User {
   ledgerEntries LedgerEntry[]
   budgetTransfers BudgetTransfer[]
   auditLogs    AuditLog[]
-  notifications Notification[]   @relation("NotificationRecipient")
-  chatSessions  ChatSession[]
+  chatSessions ChatSession[]
   knowledgeDocuments KnowledgeDocument[] @relation("KnowledgeUploader")
+  notifications Notification[]   @relation("NotificationRecipient")
 
   @@index([role])
 }
@@ -128,9 +126,9 @@ model Department {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  budgets           Budget[]
-  transactions      Transaction[]
-  recurringTx       RecurringTransaction[]
+  budgets               Budget[]
+  transactions          Transaction[]
+  recurringTransactions RecurringTransaction[]
 }
 
 model Budget {
@@ -404,8 +402,6 @@ model BudgetControlPolicy {
   @@unique([budgetId])
 }
 
-
-
 model Notification {
   id            String   @id @default(uuid())
   recipientId   String
@@ -490,4 +486,12 @@ model KnowledgeChunk {
   document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId, chunkIndex])
+}
+
+model InternalLogNonce {
+  nonce     String   @id
+  serviceId String
+  createdAt DateTime @default(now())
+
+  @@index([serviceId])
 }

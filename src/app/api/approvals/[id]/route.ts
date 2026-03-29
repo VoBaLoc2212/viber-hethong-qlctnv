@@ -22,7 +22,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     const result = await approvalAction(auth, id, body.action, body.note);
-    return ok(result, {});
+    return ok(result as Record<string, unknown>, {});
   } catch (error) {
     return handleApiError(request, error);
   }

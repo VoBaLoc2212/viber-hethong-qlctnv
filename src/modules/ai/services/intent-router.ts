@@ -9,10 +9,12 @@ const FORECAST_PATTERN = /dự báo|tháng tới|quý tới|xu hướng|trend/i;
 const TOP_CATEGORY_PATTERN = /top danh mục|xếp hạng danh mục|top category/i;
 const ANALYSIS_PATTERN = /so sánh|phân tích|vì sao|nguyên nhân|top|xếp hạng|q1|q2|q3|q4/i;
 const GUIDANCE_PATTERN = /làm sao|hướng dẫn|quy trình|hard stop|chính sách|help|hỗ trợ/i;
-const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục/i;
+const KPI_DATA_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại/i;
+const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại/i;
 
 export function ruleBasedIntent(message: string): AiIntent {
   if (GREETING_PATTERN.test(message.trim())) return "GREETING";
+  if (KPI_DATA_PATTERN.test(message)) return "QUERY";
   if (GUIDANCE_PATTERN.test(message)) return "GUIDANCE";
   if (ALERT_PATTERN.test(message)) return "ALERT";
   if (FORECAST_PATTERN.test(message)) return "FORECAST";

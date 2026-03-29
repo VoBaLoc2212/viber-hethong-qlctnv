@@ -119,13 +119,6 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [currentUser, initializing, navigateAfterAuth, pathname, router]);
 
-  useEffect(() => {
-    if (initializing || currentUser || pathname === "/auth") return;
-
-    const next = normalizeNextPath(pathname);
-    router.replace(`/auth?next=${encodeURIComponent(next)}`);
-  }, [currentUser, initializing, pathname, router]);
-
   const onAuthenticated = useCallback(
     async ({ token: nextToken, user }: { token: string; user: AuthUser }) => {
       window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, nextToken);

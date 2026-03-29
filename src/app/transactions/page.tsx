@@ -172,7 +172,9 @@ export default function TransactionsPage() {
 
   const [txForm, setTxForm] = useState({
     type: "EXPENSE" as TxType,
+    currencyMode: "VND" as "VND" | "USD",
     amount: "",
+    fxAmountUsd: "",
     budgetId: "",
     departmentId: "",
     date: getLocalDateTimeInputValue(),
@@ -205,8 +207,11 @@ export default function TransactionsPage() {
     return splits.reduce((sum, line) => sum + Number(line.amount || "0"), 0);
   }, [splits]);
   const txAmountNumber = Number(txForm.amount);
+  const fxAmountUsdNumber = Number(txForm.fxAmountUsd);
+  const txEffectiveAmount = txForm.currencyMode === "USD" ? txForm.fxAmountUsd : txForm.amount;
+  const txEffectiveAmountNumber = Number(txEffectiveAmount);
   const splitMismatch =
-    splits.length > 0 && txForm.amount.trim().length > 0 && Number.isFinite(txAmountNumber) && Math.abs(totalSplitAmount - txAmountNumber) > 0.0001;
+    splits.length > 0 && txEffectiveAmount.trim().length > 0 && Number.isFinite(txEffectiveAmountNumber) && Math.abs(totalSplitAmount - txEffectiveAmountNumber) > 0.0001;
 
   const summary = useMemo(() => {
     const totals = transactions.reduce(
@@ -419,7 +424,12 @@ export default function TransactionsPage() {
     setError(null);
     setSuccess(null);
 
-    if (!Number.isFinite(txAmountNumber) || txAmountNumber <= 0) {
+    if (txForm.currencyMode === "USD") {
+      if (!Number.isFinite(fxAmountUsdNumber) || fxAmountUsdNumber <= 0) {
+        setError("Số tiền USD phải lớn hơn 0.");
+        return;
+      }
+    } else if (!Number.isFinite(txAmountNumber) || txAmountNumber <= 0) {
       setError("Số tiền giao dịch phải lớn hơn 0.");
       return;
     }
@@ -442,7 +452,9 @@ export default function TransactionsPage() {
     try {
       await apiCreateTransaction(token, {
         type: txForm.type,
-        amount: txAmountNumber.toFixed(2),
+        amount: txForm.currencyMode === "VND" ? txAmountNumber.toFixed(2) : undefined,
+        fxCurrency: txForm.currencyMode === "USD" ? "USD" : null,
+        fxAmount: txForm.currencyMode === "USD" ? fxAmountUsdNumber.toFixed(2) : null,
         budgetId: txForm.budgetId || null,
         departmentId: txForm.departmentId || null,
         date: txForm.date || undefined,
@@ -466,7 +478,9 @@ export default function TransactionsPage() {
 
       setTxForm({
         type: "EXPENSE",
+        currencyMode: "VND",
         amount: "",
+        fxAmountUsd: "",
         budgetId: "",
         departmentId: "",
         date: getLocalDateTimeInputValue(),
@@ -746,14 +760,47 @@ export default function TransactionsPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="tx-amount">Số tiền</Label>
+                      <Label htmlFor="tx-currency-mode">Tiền tệ nhập</Label>
+                      <select
+                        id="tx-currency-mode"
+                        className="h-10 w-full rounded-md border bg-background px-3"
+                        value={txForm.currencyMode}
+                        onChange={(event) =>
+                          setTxForm((prev) => ({
+                            ...prev,
+                            currencyMode: event.target.value as "VND" | "USD",
+                            amount: event.target.value === "VND" ? prev.amount : "",
+                            fxAmountUsd: event.target.value === "USD" ? prev.fxAmountUsd : "",
+                          }))
+                        }
+                      >
+                        <option value="VND">VND (nhập trực tiếp)</option>
+                        <option value="USD">USD (tự quy đổi sang VND)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="tx-amount">
+                        {txForm.currencyMode === "USD" ? "Số tiền USD" : "Số tiền VND"}
+                      </Label>
                       <Input
                         id="tx-amount"
-                        placeholder="Ví dụ: 5000000"
-                        value={txForm.amount}
-                        onChange={(event) => setTxForm((prev) => ({ ...prev, amount: event.target.value }))}
+                        placeholder={txForm.currencyMode === "USD" ? "Ví dụ: 100" : "Ví dụ: 5000000"}
+                        value={txForm.currencyMode === "USD" ? txForm.fxAmountUsd : txForm.amount}
+                        onChange={(event) =>
+                          setTxForm((prev) =>
+                            prev.currencyMode === "USD"
+                              ? { ...prev, fxAmountUsd: event.target.value }
+                              : { ...prev, amount: event.target.value }
+                          )
+                        }
                         required
                       />
+                      {txForm.currencyMode === "USD" ? (
+                        <p className="text-xs text-muted-foreground">
+                          Hệ thống sẽ tự lấy tỷ giá USD/VND hiện tại từ web và quy đổi sang VND khi tạo phiếu.
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="space-y-2">

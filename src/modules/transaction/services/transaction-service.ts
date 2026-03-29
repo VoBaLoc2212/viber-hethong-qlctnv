@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { Prisma, type TransactionStatus, type TransactionType } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
+import { convertUsdToVndByDate } from "@/modules/fx";
 import {
   addMoney,
   calculateAvailable,
@@ -36,12 +37,6 @@ function ensureIncomeStatus(status: TransactionStatus) {
   if (!allowed.includes(status)) {
     throw new AppError("Income status must be APPROVED or EXECUTED", "INVALID_INPUT");
   }
-}
-
-type ApprovalStatusCompat = "PENDING" | "APPROVED" | "REJECTED";
-
-function effectiveApprovalStatus(status: string, statusV2: ApprovalStatusCompat | null): ApprovalStatusCompat {
-  return statusV2 ?? (status as ApprovalStatusCompat);
 }
 
 async function getPolicyForBudgetTx(tx: Prisma.TransactionClient, budgetId: string) {
@@ -144,7 +139,6 @@ type ListTransactionsFilter = {
   status?: TransactionStatus;
   departmentId?: string;
   budgetId?: string;
-  q?: string;
 };
 
 export async function listTransactions(auth: AuthContext, filter: ListTransactionsFilter) {
@@ -154,21 +148,11 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
   const limit = Number.isFinite(filter.limit) && filter.limit > 0 ? Math.min(filter.limit, 100) : 20;
   const skip = (page - 1) * limit;
 
-  const keyword = filter.q?.trim().slice(0, 100);
-
   const where: Prisma.TransactionWhereInput = {
     type: filter.type,
     status: filter.status,
     departmentId: filter.departmentId,
     budgetId: filter.budgetId,
-    ...(keyword
-      ? {
-          OR: [
-            { code: { contains: keyword, mode: "insensitive" } },
-            { description: { contains: keyword, mode: "insensitive" } },
-          ],
-        }
-      : {}),
   };
 
   const [total, rows] = await Promise.all([
@@ -227,12 +211,7 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
     throw new AppError("type is required", "INVALID_INPUT");
   }
 
-  if (!payload.amount || compareMoney(payload.amount, "0.00") <= 0) {
-    throw new AppError("amount must be greater than 0", "INVALID_INPUT");
-  }
-
   const txType = payload.type;
-  const txAmount = payload.amount;
 
   const status = payload.status ?? (txType === "EXPENSE" ? "PENDING" : "APPROVED");
 
@@ -248,9 +227,36 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
     throw new AppError("date is invalid", "INVALID_INPUT");
   }
 
-  const fxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
+  let txAmount = payload.amount;
+  let fxCurrency = payload.fxCurrency?.trim().toUpperCase() ?? null;
+  let fxAmount = payload.fxAmount ?? null;
+
+  if (!txAmount && !(fxCurrency === "USD" && fxAmount)) {
+    throw new AppError("amount is required", "INVALID_INPUT");
+  }
+  let fxRate = payload.fxRate ?? null;
+  let baseCurrency = payload.baseCurrency ?? null;
+  let baseAmount = payload.baseAmount ?? null;
+  let fxRateProvider = payload.fxRateProvider ?? null;
+  let fxRateFetchedAt = payload.fxRateFetchedAt ? new Date(payload.fxRateFetchedAt) : null;
   if (payload.fxRateFetchedAt && (!fxRateFetchedAt || Number.isNaN(fxRateFetchedAt.getTime()))) {
     throw new AppError("fxRateFetchedAt is invalid", "INVALID_INPUT");
+  }
+
+  const shouldAutoConvertUsd = fxCurrency === "USD" && Boolean(fxAmount);
+
+  if (shouldAutoConvertUsd) {
+    const converted = await prisma.$transaction((db) => convertUsdToVndByDate(db, fxAmount as string, txDate));
+    txAmount = converted.convertedAmount;
+    fxRate = converted.rate;
+    baseCurrency = converted.convertedCurrency;
+    baseAmount = converted.convertedAmount;
+    fxRateProvider = converted.source;
+    fxRateFetchedAt = new Date(converted.fetchedAt);
+  }
+
+  if (!txAmount || compareMoney(txAmount, "0.00") <= 0) {
+    throw new AppError("amount must be greater than 0", "INVALID_INPUT");
   }
 
   if (payload.splits && payload.splits.length > 0) {
@@ -303,12 +309,12 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
           date: txDate,
           description: payload.description ?? null,
           recurringSourceId: payload.recurringSourceId ?? null,
-          fxCurrency: payload.fxCurrency ?? null,
-          fxAmount: payload.fxAmount ?? null,
-          fxRate: payload.fxRate ?? null,
-          baseCurrency: payload.baseCurrency ?? null,
-          baseAmount: payload.baseAmount ?? null,
-          fxRateProvider: payload.fxRateProvider ?? null,
+          fxCurrency,
+          fxAmount,
+          fxRate,
+          baseCurrency,
+          baseAmount,
+          fxRateProvider,
           fxRateFetchedAt,
           budgetId: budget.id,
           departmentId: payload.departmentId ?? budget.departmentId,
@@ -396,12 +402,12 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         date: txDate,
         description: payload.description ?? null,
         recurringSourceId: payload.recurringSourceId ?? null,
-        fxCurrency: payload.fxCurrency ?? null,
-        fxAmount: payload.fxAmount ?? null,
-        fxRate: payload.fxRate ?? null,
-        baseCurrency: payload.baseCurrency ?? null,
-        baseAmount: payload.baseAmount ?? null,
-        fxRateProvider: payload.fxRateProvider ?? null,
+        fxCurrency,
+        fxAmount,
+        fxRate,
+        baseCurrency,
+        baseAmount,
+        fxRateProvider,
         fxRateFetchedAt,
         budgetId: payload.budgetId ?? null,
         departmentId: payload.departmentId ?? null,
@@ -582,25 +588,21 @@ export async function changeTransactionStatus(
         const currentApproval = payload.approvalId
           ? await db.approval.findUnique({
               where: { id: payload.approvalId },
-              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
+              select: { id: true, transactionId: true, status: true },
             })
           : await db.approval.findFirst({
               where: {
                 transactionId: tx.id,
-                step: 1,
-                OR: [{ status: "PENDING" }, { statusV2: "PENDING" }],
+                status: "PENDING",
               },
               orderBy: { createdAt: "desc" },
-              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
+              select: { id: true, transactionId: true, status: true },
             });
 
         if (!currentApproval || currentApproval.transactionId !== tx.id) {
           throw new AppError("Approval not found", "NOT_FOUND");
         }
-        if (currentApproval.step !== 1) {
-          throw new AppError("Invalid approval step for manager action", "UNPROCESSABLE_ENTITY");
-        }
-        if (effectiveApprovalStatus(currentApproval.status, currentApproval.statusV2) !== "PENDING") {
+        if (currentApproval.status !== "PENDING") {
           throw new AppError("Approval is already finalized", "CONFLICT");
         }
 
@@ -611,36 +613,8 @@ export async function changeTransactionStatus(
           data: {
             approverId: auth.userId,
             status: "APPROVED",
-            statusV2: "APPROVED",
             note: payload.note ?? null,
             approvedAt: new Date(),
-            rejectedAt: null,
-          },
-        });
-
-        const accountant = await db.user.findFirst({
-          where: { role: "ACCOUNTANT", isActive: true },
-          select: { id: true },
-        });
-        if (!accountant) {
-          throw new AppError("No active ACCOUNTANT found for approval step 2", "CONFLICT");
-        }
-
-        const existingStep2 = await db.approval.findFirst({
-          where: { transactionId: tx.id, step: 2 },
-          select: { id: true },
-        });
-        if (existingStep2) {
-          throw new AppError("Step 2 approval already exists", "CONFLICT");
-        }
-
-        await db.approval.create({
-          data: {
-            transactionId: tx.id,
-            approverId: accountant.id,
-            step: 2,
-            status: "PENDING",
-            statusV2: "PENDING",
           },
         });
 
@@ -655,36 +629,31 @@ export async function changeTransactionStatus(
         const managerApproval = await db.approval.findFirst({
           where: {
             transactionId: tx.id,
-            step: 1,
-            OR: [{ status: "APPROVED" }, { statusV2: "APPROVED" }],
+            status: "APPROVED",
           },
           select: { id: true },
         });
         if (!managerApproval) {
-          throw new AppError("Step 1 approval is required", "UNPROCESSABLE_ENTITY");
+          throw new AppError("Manager approval is required first", "UNPROCESSABLE_ENTITY");
         }
 
         const currentApproval = payload.approvalId
           ? await db.approval.findUnique({
               where: { id: payload.approvalId },
-              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
+              select: { id: true, transactionId: true, status: true },
             })
           : await db.approval.findFirst({
               where: {
                 transactionId: tx.id,
-                step: 2,
-                OR: [{ status: "PENDING" }, { statusV2: "PENDING" }],
+                status: "PENDING",
               },
               orderBy: { createdAt: "desc" },
-              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
+              select: { id: true, transactionId: true, status: true },
             });
         if (!currentApproval || currentApproval.transactionId !== tx.id) {
           throw new AppError("Approval not found", "NOT_FOUND");
         }
-        if (currentApproval.step !== 2) {
-          throw new AppError("Invalid approval step for accountant action", "UNPROCESSABLE_ENTITY");
-        }
-        if (effectiveApprovalStatus(currentApproval.status, currentApproval.statusV2) !== "PENDING") {
+        if (currentApproval.status !== "PENDING") {
           throw new AppError("Approval is already finalized", "CONFLICT");
         }
 
@@ -695,10 +664,8 @@ export async function changeTransactionStatus(
           data: {
             approverId: auth.userId,
             status: "APPROVED",
-            statusV2: "APPROVED",
             note: payload.note ?? null,
             approvedAt: new Date(),
-            rejectedAt: null,
           },
         });
 
@@ -713,29 +680,21 @@ export async function changeTransactionStatus(
         const currentApproval = payload.approvalId
           ? await db.approval.findUnique({
               where: { id: payload.approvalId },
-              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
+              select: { id: true, transactionId: true, status: true },
             })
           : await db.approval.findFirst({
               where: {
                 transactionId: tx.id,
-                step: tx.status === "PENDING" ? 1 : 2,
-                OR: [{ status: "PENDING" }, { statusV2: "PENDING" }],
+                status: "PENDING",
               },
               orderBy: { createdAt: "desc" },
-              select: { id: true, transactionId: true, step: true, status: true, statusV2: true },
+              select: { id: true, transactionId: true, status: true },
             });
         if (!currentApproval || currentApproval.transactionId !== tx.id) {
           throw new AppError("Approval not found", "NOT_FOUND");
         }
-        if (effectiveApprovalStatus(currentApproval.status, currentApproval.statusV2) !== "PENDING") {
+        if (currentApproval.status !== "PENDING") {
           throw new AppError("Approval is already finalized", "CONFLICT");
-        }
-
-        if (tx.status === "PENDING" && currentApproval.step !== 1) {
-          throw new AppError("Invalid approval step for reject action", "UNPROCESSABLE_ENTITY");
-        }
-        if (tx.status === "APPROVED" && currentApproval.step !== 2) {
-          throw new AppError("Invalid approval step for reject action", "UNPROCESSABLE_ENTITY");
         }
 
         nextStatus = "REJECTED";
@@ -745,10 +704,8 @@ export async function changeTransactionStatus(
           data: {
             approverId: auth.userId,
             status: "REJECTED",
-            statusV2: "REJECTED",
             note: payload.reason ?? payload.note ?? null,
             approvedAt: null,
-            rejectedAt: new Date(),
           },
         });
 
@@ -769,14 +726,12 @@ export async function changeTransactionStatus(
             throw new AppError("Only APPROVED transaction can be executed", "UNPROCESSABLE_ENTITY");
           }
 
-          const approvedSteps = await db.approval.findMany({
+          const approvedCount = await db.approval.count({
             where: { transactionId: tx.id, status: "APPROVED" },
-            select: { step: true },
           });
 
-          const stepSet = new Set(approvedSteps.map((item) => item.step));
-          if (!stepSet.has(1) || !stepSet.has(2)) {
-            throw new AppError("Two-step approval is required before execute", "UNPROCESSABLE_ENTITY");
+          if (approvedCount === 0) {
+            throw new AppError("Approval is required before execute", "UNPROCESSABLE_ENTITY");
           }
 
           const available = calculateAvailable(amount, reserved, used);

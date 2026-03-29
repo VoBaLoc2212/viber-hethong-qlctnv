@@ -9,15 +9,6 @@ export type Department = {
   budgetAllocated: number;
 };
 
-export type Budget = {
-  id: number;
-  departmentId: number;
-  period: string; // YYYY-MM format
-  amount: number;
-  reserved: number; // Số tiền đã được "giữ chỗ" (approved nhưng chưa chi)
-  used: number;     // Số tiền đã thực chi
-};
-
 export type Transaction = {
   id: number;
   transactionCode: string;
@@ -57,7 +48,6 @@ export type ViberStore = {
   nextNotificationId: number;
   nextBudgetId: number;
   departments: Department[];
-  budgets: Budget[];
   transactions: Transaction[];
   users: AppUser[];
   notifications: Notification[];
@@ -65,7 +55,6 @@ export type ViberStore = {
 };
 
 function createSeedStore(): ViberStore {
-  const currentPeriod = "2026-03"; // Tháng hiện tại
   return {
     nextTxId: 3,
     nextDeptId: 3,
@@ -74,10 +63,6 @@ function createSeedStore(): ViberStore {
     departments: [
       { id: 1, name: "Engineering", code: "ENG", budgetAllocated: 250000 },
       { id: 2, name: "Marketing", code: "MKT", budgetAllocated: 150000 },
-    ],
-    budgets: [
-      { id: 1, departmentId: 1, period: currentPeriod, amount: 250000, reserved: 0, used: 0 },
-      { id: 2, departmentId: 2, period: currentPeriod, amount: 150000, reserved: 0, used: 0 },
     ],
     transactions: [
       {
@@ -135,7 +120,6 @@ export function getStore(): ViberStore {
 
   const store = g.__VIBER_STORE__ as Partial<ViberStore>;
   if (!Array.isArray(store.departments)) store.departments = [];
-  if (!Array.isArray(store.budgets)) store.budgets = [];
   if (!Array.isArray(store.transactions)) store.transactions = [];
   if (!Array.isArray(store.users)) store.users = createSeedStore().users;
   if (!Array.isArray(store.notifications)) store.notifications = [];
@@ -150,7 +134,7 @@ export function getStore(): ViberStore {
     store.nextNotificationId = computeNextId(store.notifications.map((n: any) => Number(n?.id ?? 0)));
   }
   if (typeof store.nextBudgetId !== "number") {
-    store.nextBudgetId = computeNextId(store.budgets.map((b: any) => Number(b?.id ?? 0)));
+    store.nextBudgetId = 1;
   }
   if (typeof store.currentUserId !== "number") {
     store.currentUserId = 1;

@@ -463,17 +463,13 @@ async function main() {
         {
           transactionId: txMkt1.id,
           approverId: manager.id,
-          step: 1,
           status: "PENDING",
-          statusV2: "PENDING",
           note: "Waiting manager review",
         },
         {
           transactionId: txIt2.id,
           approverId: accountant.id,
-          step: 2,
           status: "PENDING",
-          statusV2: "PENDING",
           note: "Pending accountant finalization",
         },
       ],

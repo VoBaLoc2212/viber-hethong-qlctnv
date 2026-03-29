@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 
-import { createFxRate, listFxRates } from "@/modules/fx";
-import { created, handleApiError, ok, readJsonBody, requireAuth, requireRole } from "@/modules/shared";
+import { listFxRates } from "@/modules/fx";
+import { AppError, handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";
 import { getCorrelationId } from "@/modules/shared/http/request";
 
 export async function GET(request: NextRequest) {
@@ -36,21 +36,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const correlationId = getCorrelationId(request);
+  getCorrelationId(request);
 
   try {
     const auth = await requireAuth(request);
     requireRole(auth, ["FINANCE_ADMIN"]);
-    const body = await readJsonBody<{
-      fromCurrency?: string;
-      toCurrency?: string;
-      rateDate?: string;
-      rate?: string;
-      source?: string;
-    }>(request);
-
-    const rate = await createFxRate(auth, body, correlationId);
-    return created(rate, {});
+    throw new AppError("Manual FX update is disabled. Rates are auto-updated from web source.", "FORBIDDEN");
   } catch (error) {
     return handleApiError(request, error);
   }

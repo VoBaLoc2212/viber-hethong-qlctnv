@@ -42,9 +42,9 @@ const STATUS_CONFIG: Record<
   ApprovalStatus,
   { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
 > = {
-  PENDING: { label: "Cho duyet", variant: "secondary" },
-  APPROVED: { label: "Da duyet", variant: "default" },
-  REJECTED: { label: "Tu choi", variant: "destructive" },
+  PENDING: { label: "Ch\u1EDD duy\u1EC7t", variant: "secondary" },
+  APPROVED: { label: "\u0110\u00E3 duy\u1EC7t", variant: "default" },
+  REJECTED: { label: "T\u1EEB ch\u1ED1i", variant: "destructive" },
 };
 
 function StatusBadge({ status }: { status: ApprovalStatus }) {
@@ -74,10 +74,10 @@ function ActionButtons({
     return (
       <div className="flex gap-1 justify-end">
         <Button size="sm" variant="default" className="gap-1 h-7 text-xs" onClick={() => onAction(item, "approve")}>
-          <CheckCircle2 className="w-3 h-3" /> Duyet
+          <CheckCircle2 className="w-3 h-3" /> Duy\u1EC7t
         </Button>
         <Button size="sm" variant="destructive" className="gap-1 h-7 text-xs" onClick={() => onAction(item, "reject")}>
-          <XCircle className="w-3 h-3" /> Tu choi
+          <XCircle className="w-3 h-3" /> T\u1EEB ch\u1ED1i
         </Button>
       </div>
     );
@@ -89,7 +89,7 @@ function ActionButtons({
           <Banknote className="w-3 h-3" /> Chi
         </Button>
         <Button size="sm" variant="destructive" className="gap-1 h-7 text-xs" onClick={() => onAction(item, "not-execute")}>
-          <Ban className="w-3 h-3" /> Khong chi
+          <Ban className="w-3 h-3" /> Kh\u00F4ng chi
         </Button>
       </div>
     );
@@ -119,12 +119,12 @@ export default function ApprovalsPage() {
     mutation: {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: ["/api/approvals"] });
-        toast({ title: "Thanh cong", description: "Da cap nhat trang thai phieu." });
+        toast({ title: "Th\u00E0nh c\u00F4ng", description: "\u0110\u00E3 c\u1EADp nh\u1EADt tr\u1EA1ng th\u00E1i phi\u1EBFu." });
         setActionDialog(null);
         setNote("");
       },
-      onError: (err) => {
-        toast({ title: "Loi", description: err.message, variant: "destructive" });
+      onError: (err: Error) => {
+        toast({ title: "L\u1ED7i", description: err.message, variant: "destructive" });
       },
     },
   });
@@ -133,7 +133,7 @@ export default function ApprovalsPage() {
     return (
       <div className="p-6">
         <Card className="p-8 text-center text-muted-foreground">
-          Ban khong co quyen truy cap trang nay.
+          B\u1EA1n kh\u00F4ng c\u00F3 quy\u1EC1n truy c\u1EADp trang n\u00E0y.
         </Card>
       </div>
     );
@@ -156,24 +156,29 @@ export default function ApprovalsPage() {
   }
 
   const actionLabels: Record<string, string> = {
-    approve: "Duyet",
-    reject: "Khong duyet",
+    approve: "Duy\u1EC7t",
+    reject: "Kh\u00F4ng duy\u1EC7t",
     execute: "Chi",
-    "not-execute": "Khong chi",
+    "not-execute": "Kh\u00F4ng chi",
   };
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Phieu can xu ly va lich su phieu da duyet
-      </p>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Quy tr\u00ECnh Duy\u1EC7t chi
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Phi\u1EBFu c\u1EA7n x\u1EED l\u00FD v\u00E0 l\u1ECBch s\u1EED phi\u1EBFu \u0111\u00E3 duy\u1EC7t
+        </p>
+      </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
-          <TabsTrigger value="all">Tat ca</TabsTrigger>
-          <TabsTrigger value="pending">Cho duyet</TabsTrigger>
-          <TabsTrigger value="approved">Da duyet</TabsTrigger>
-          <TabsTrigger value="rejected">Tu choi</TabsTrigger>
+          <TabsTrigger value="all">T\u1EA5t c\u1EA3</TabsTrigger>
+          <TabsTrigger value="pending">Ch\u1EDD duy\u1EC7t</TabsTrigger>
+          <TabsTrigger value="approved">\u0110\u00E3 duy\u1EC7t</TabsTrigger>
+          <TabsTrigger value="rejected">T\u1EEB ch\u1ED1i</TabsTrigger>
         </TabsList>
 
         <TabsContent value={tab} className="mt-4">
@@ -185,21 +190,21 @@ export default function ApprovalsPage() {
             </div>
           ) : !approvals || approvals.length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground">
-              Khong co phieu nao.
+              Kh\u00F4ng c\u00F3 phi\u1EBFu n\u00E0o.
             </Card>
           ) : (
             <Card>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Ma GD</TableHead>
-                    <TableHead>Mo ta</TableHead>
-                    <TableHead className="text-right">So tien</TableHead>
-                    <TableHead>Trang thai GD</TableHead>
-                    <TableHead>Trang thai duyet</TableHead>
-                    <TableHead>Nguoi duyet</TableHead>
-                    <TableHead>Ngay tao</TableHead>
-                    <TableHead className="text-right">Hanh dong</TableHead>
+                    <TableHead>M\u00E3 GD</TableHead>
+                    <TableHead>M\u00F4 t\u1EA3</TableHead>
+                    <TableHead className="text-right">S\u1ED1 ti\u1EC1n</TableHead>
+                    <TableHead>Tr\u1EA1ng th\u00E1i GD</TableHead>
+                    <TableHead>Tr\u1EA1ng th\u00E1i duy\u1EC7t</TableHead>
+                    <TableHead>Ng\u01B0\u1EDDi duy\u1EC7t</TableHead>
+                    <TableHead>Ng\u00E0y t\u1EA1o</TableHead>
+                    <TableHead className="text-right">H\u00E0nh \u0111\u1ED9ng</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -244,25 +249,25 @@ export default function ApprovalsPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {actionDialog && actionLabels[actionDialog.action]} phieu{" "}
+              {actionDialog && actionLabels[actionDialog.action]} phi\u1EBFu{" "}
               {actionDialog?.item.transactionCode}
             </DialogTitle>
             <DialogDescription>
-              So tien: {actionDialog && formatCurrency(actionDialog.item.transactionAmount)}
+              S\u1ED1 ti\u1EC1n: {actionDialog && formatCurrency(actionDialog.item.transactionAmount)}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Ghi chu</label>
+            <label className="text-sm font-medium">Ghi ch\u00FA</label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Nhap ghi chu (khong bat buoc)..."
+              placeholder="Nh\u1EADp ghi ch\u00FA (kh\u00F4ng b\u1EAFt bu\u1ED9c)..."
               rows={3}
             />
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setActionDialog(null)}>
-              Huy
+              H\u1EE7y
             </Button>
             <Button
               onClick={handleConfirmAction}

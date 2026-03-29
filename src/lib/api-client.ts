@@ -9,15 +9,13 @@ import {
 
 import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
 
-type QueryHookOptions<TData> = Omit<UseQueryOptions<TData, Error, TData, readonly unknown[]>, "queryKey" | "queryFn">;
-
 export type TransactionType = "INCOME" | "EXPENSE";
 export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR";
 
 export type Department = {
-  id: number;
+  id: string;
   name: string;
   code: string;
   budgetAllocated: number;
@@ -94,6 +92,17 @@ export type DashboardKpis = {
   currency?: "VND" | "USD";
 };
 
+export type ExpensesByMonthRow = {
+  month: string;
+  income: number;
+  expenses: number;
+};
+
+export type ExpensesByMonthPayload = {
+  rows: ExpensesByMonthRow[];
+  currency?: "VND" | "USD";
+};
+
 export type FxRate = {
   id: string;
   fromCurrency: "USD" | "VND";
@@ -115,12 +124,6 @@ export type GetFxRatesParams = {
   rateDateFrom?: string;
   rateDateTo?: string;
   q?: string;
-};
-
-export type ExpensesByMonthRow = {
-  month: string;
-  income: number;
-  expenses: number;
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -146,15 +149,15 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(message);
   }
 
-  const payload = (await res.json()) as { data?: T; meta?: unknown } | T;
-  if (payload && typeof payload === "object" && "data" in (payload as any) && "meta" in (payload as any)) {
+  const payload = (await res.json()) as { data?: T } | T;
+  if (payload && typeof payload === "object" && "data" in (payload as any)) {
     return (payload as { data: T }).data;
   }
 
   return payload as T;
 }
 
-export function useGetDepartments(options?: QueryHookOptions<Department[]>) {
+export function useGetDepartments(options?: UseQueryOptions<Department[]>) {
   return useQuery({
     queryKey: ["/api/departments"],
     queryFn: async () => {
@@ -183,7 +186,10 @@ export type GetTransactionsParams = {
   q?: string;
 };
 
-export function useGetTransactions(params: GetTransactionsParams = {}, options?: QueryHookOptions<Paginated<Transaction>>) {
+export function useGetTransactions(
+  params: GetTransactionsParams = {},
+  options?: Omit<UseQueryOptions<Paginated<Transaction>>, "queryKey" | "queryFn">,
+) {
   const search = new URLSearchParams();
   if (params.page) search.set("page", String(params.page));
   if (params.limit) search.set("limit", String(params.limit));
@@ -236,7 +242,9 @@ export function useUpdateTransactionStatus(opts?: {
   });
 }
 
-export function useGetDashboardKpis(options?: QueryHookOptions<DashboardKpis>) {
+export function useGetDashboardKpis(
+  options?: Omit<UseQueryOptions<DashboardKpis>, "queryKey" | "queryFn">,
+) {
   return useQuery({
     queryKey: ["/api/dashboard/kpis"],
     queryFn: () => fetchJson<DashboardKpis>("/api/dashboard/kpis"),
@@ -244,165 +252,21 @@ export function useGetDashboardKpis(options?: QueryHookOptions<DashboardKpis>) {
   });
 }
 
-export function useGetExpensesByMonth(options?: QueryHookOptions<ExpensesByMonthRow[]>) {
+export function useGetExpensesByMonth(options?: UseQueryOptions<ExpensesByMonthRow[]>) {
   return useQuery({
     queryKey: ["/api/dashboard/expenses-by-month"],
     queryFn: async () => {
-      const result = await fetchJson<{ rows: ExpensesByMonthRow[]; currency?: "VND" | "USD" }>("/api/dashboard/expenses-by-month");
+      const result = await fetchJson<ExpensesByMonthPayload>("/api/dashboard/expenses-by-month");
       return result.rows;
     },
     ...options,
   });
 }
 
-// ─── Auth / User ───
-
-export function useGetCurrentUser(options?: QueryHookOptions<AppUser>) {
-  return useQuery({
-    queryKey: ["/api/auth"],
-    queryFn: () => fetchJson<AppUser>("/api/auth"),
-    ...options,
-  });
-}
-
-export function useSwitchUser(opts?: {
-  mutation?: UseMutationOptions<AppUser, Error, { userId: number }>;
-}) {
-  return useMutation({
-    mutationFn: ({ userId }) =>
-      fetchJson<AppUser>("/api/auth", {
-        method: "PUT",
-        body: JSON.stringify({ userId }),
-      }),
-    ...(opts?.mutation ?? {}),
-  });
-}
-
-export function useLogout(opts?: {
-  mutation?: UseMutationOptions<{ success: boolean }, Error, void>;
-}) {
-  return useMutation({
-    mutationFn: () =>
-      fetchJson<{ success: boolean }>("/api/auth/logout", {
-        method: "POST",
-      }),
-    ...(opts?.mutation ?? {}),
-  });
-}
-
-export function useGetUsers(role?: UserRole, options?: QueryHookOptions<AppUser[]>) {
-  const url = role ? `/api/auth/users?role=${role}` : "/api/auth/users";
-  return useQuery({
-    queryKey: ["/api/auth/users", role],
-    queryFn: () => fetchJson<AppUser[]>(url),
-    ...options,
-  });
-}
-
-// ─── Approvals ───
-
-export function useGetApprovals(
-  params: { status?: ApprovalStatus } = {},
-  options?: Omit<UseQueryOptions<ApprovalItem[]>, 'queryKey' | 'queryFn'>,
+export function useGetFxRates(
+  params: GetFxRatesParams = {},
+  options?: Omit<UseQueryOptions<Paginated<FxRate>>, "queryKey" | "queryFn">,
 ) {
-  const search = new URLSearchParams();
-  if (params.status) search.set("status", params.status);
-  const url = `/api/approvals${search.toString() ? `?${search.toString()}` : ""}`;
-
-  return useQuery({
-    queryKey: ["/api/approvals", params],
-    queryFn: () => fetchJson<ApprovalItem[]>(url),
-    ...options,
-  });
-}
-
-export function useApprovalAction(opts?: {
-  mutation?: UseMutationOptions<
-    ApprovalItem,
-    Error,
-    {
-      id: string;
-      data: {
-        action: "approve" | "reject" | "execute" | "not-execute";
-        note?: string;
-      };
-    }
-  >;
-}) {
-  return useMutation({
-    mutationFn: ({ id, data }) =>
-      fetchJson<ApprovalItem>(`/api/approvals/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(data),
-      }),
-    ...(opts?.mutation ?? {}),
-  });
-}
-
-// ─── Notifications ───
-
-export function useGetNotifications(options?: QueryHookOptions<NotificationsResponse>) {
-  return useQuery({
-    queryKey: ["/api/notifications"],
-    queryFn: () => fetchJson<NotificationsResponse>("/api/notifications"),
-    refetchInterval: 10000,
-    ...options,
-  });
-}
-
-export function useMarkNotificationRead(opts?: {
-  mutation?: UseMutationOptions<NotificationItem, Error, { id: number }>;
-}) {
-  return useMutation({
-    mutationFn: ({ id }) =>
-      fetchJson<NotificationItem>(`/api/notifications/${id}`, {
-        method: "PATCH",
-      }),
-    ...(opts?.mutation ?? {}),
-  });
-}
-
-export function useMarkAllNotificationsRead(opts?: {
-  mutation?: UseMutationOptions<{ success: boolean }, Error, void>;
-}) {
-  return useMutation({
-    mutationFn: () =>
-      fetchJson<{ success: boolean }>("/api/notifications/read-all", {
-        method: "PATCH",
-      }),
-    ...(opts?.mutation ?? {}),
-  });
-}
-
-// ─── Budgets ───
-
-export type BudgetAvailable = {
-  departmentId: number;
-  period: string;
-  amount: number;
-  reserved: number;
-  used: number;
-  available: number;
-};
-
-export function useBudgetAvailable(
-  params: { departmentId?: number; period?: string },
-  options?: QueryHookOptions<BudgetAvailable>,
-) {
-  const search = new URLSearchParams();
-  if (params.departmentId != null) search.set("departmentId", String(params.departmentId));
-  if (params.period) search.set("period", params.period);
-  const url = `/api/budgets/available?${search.toString()}`;
-
-  return useQuery({
-    queryKey: ["/api/budgets/available", params],
-    queryFn: () => fetchJson<BudgetAvailable>(url),
-    enabled: !!params.departmentId,
-    ...options,
-  });
-}
-
-export function useGetFxRates(params: GetFxRatesParams = {}, options?: QueryHookOptions<Paginated<FxRate>>) {
   const search = new URLSearchParams();
   if (params.page) search.set("page", String(params.page));
   if (params.limit) search.set("limit", String(params.limit));
@@ -465,6 +329,48 @@ export function useUpdateFxRate(opts?: {
     mutationFn: ({ id, data }) =>
       fetchJson<FxRate>(`/api/fx-rates/${id}`, {
         method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    ...(opts?.mutation ?? {}),
+  });
+}
+
+// ─── Approvals ───
+
+type QueryHookOptions<T> = Omit<UseQueryOptions<T>, "queryKey" | "queryFn">;
+
+export function useGetApprovals(
+  params: { status?: ApprovalStatus } = {},
+  options?: QueryHookOptions<ApprovalItem[]>,
+) {
+  const search = new URLSearchParams();
+  if (params.status) search.set("status", params.status);
+  const url = `/api/approvals${search.toString() ? `?${search.toString()}` : ""}`;
+
+  return useQuery({
+    queryKey: ["/api/approvals", params],
+    queryFn: () => fetchJson<ApprovalItem[]>(url),
+    ...options,
+  });
+}
+
+export function useApprovalAction(opts?: {
+  mutation?: UseMutationOptions<
+    ApprovalItem,
+    Error,
+    {
+      id: string;
+      data: {
+        action: "approve" | "reject" | "execute" | "not-execute";
+        note?: string;
+      };
+    }
+  >;
+}) {
+  return useMutation({
+    mutationFn: ({ id, data }) =>
+      fetchJson<ApprovalItem>(`/api/approvals/${id}`, {
+        method: "PATCH",
         body: JSON.stringify(data),
       }),
     ...(opts?.mutation ?? {}),

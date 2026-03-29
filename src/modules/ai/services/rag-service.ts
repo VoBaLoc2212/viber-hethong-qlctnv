@@ -13,6 +13,7 @@ const DOC_PATHS = [
   resolve(process.cwd(), "docs/AI_RULES.md"),
   resolve(process.cwd(), "docs/BUSINESS_FLOW.md"),
   resolve(process.cwd(), "docs/DOMAIN_DESIGN.md"),
+  resolve(process.cwd(), "docs/mock_quy_trinh_phe_duyet_chi_phi.txt"),
 ];
 
 function hash(value: string): string {
@@ -42,12 +43,92 @@ async function loadStaticContext() {
   return chunks.filter(Boolean).join("\n\n");
 }
 
-function fallbackAnswer(question: string, context: string) {
-  if (!context.trim()) {
-    return "Hiện chưa có nguồn tài liệu nội bộ để trả lời câu hỏi hướng dẫn này.";
+function buildProcessAnswerFromChunks(
+  question: string,
+  knowledgeChunks: Array<{ source: string; snippet: string; content: string }>,
+): string | null {
+  const isProcessQuestion = /quy trình|process|phê duyệt|approval/i.test(question);
+  if (!isProcessQuestion || knowledgeChunks.length === 0) return null;
+
+  const preferredChunk =
+    knowledgeChunks.find((item) => /mock_quy_trinh_phe_duyet_chi_phi\.txt/i.test(item.source)) ??
+    knowledgeChunks.find((item) => /quy_trinh|phe_duyet|approval|process/i.test(item.source)) ??
+    knowledgeChunks.find((item) => /\b(bước|buoc)\s*\d+\s*:/im.test(item.content)) ??
+    knowledgeChunks[0];
+
+  const lines = preferredChunk.content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const stepLines = lines
+    .filter((line) => /^(bước|buoc)\s*\d+\s*:/i.test(line))
+    .slice(0, 5);
+
+  if (stepLines.length > 0) {
+    return `${stepLines.join(" ")} Bạn có thể vào trang Help để xem đầy đủ hướng dẫn và chính sách quyền truy cập.`;
   }
 
-  return `Mình đã tra cứu tài liệu nội bộ. Với câu hỏi \"${question}\", bạn có thể vào trang Help để xem hướng dẫn thao tác và chính sách quyền truy cập.`;
+  const keyLines = lines
+    .filter((line) => /(manager|accountant|finance_admin|hard-stop|sla|phê duyệt|phe duyet)/i.test(line))
+    .slice(0, 4);
+
+  if (keyLines.length > 0) {
+    return `${keyLines.join(" ")} Bạn có thể vào trang Help để xem đầy đủ hướng dẫn và chính sách quyền truy cập.`;
+  }
+
+  return null;
+}
+
+function buildProcessAnswerFromStaticContext(question: string, staticContext: string): string | null {
+  const isProcessQuestion = /quy trình|process|phê duyệt|approval/i.test(question);
+  if (!isProcessQuestion || !staticContext.trim()) return null;
+
+  const marker = "# mock_quy_trinh_phe_duyet_chi_phi.txt";
+  const idx = staticContext.indexOf(marker);
+  if (idx < 0) return null;
+
+  const section = staticContext.slice(idx + marker.length);
+  const nextDocIdx = section.indexOf("\n# ");
+  const content = (nextDocIdx >= 0 ? section.slice(0, nextDocIdx) : section).trim();
+
+  const lines = content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  const stepLines = lines
+    .filter((line) => /^(bước|buoc)\s*\d+\s*:/i.test(line))
+    .slice(0, 5);
+
+  if (stepLines.length > 0) {
+    return `${stepLines.join(" ")} Bạn có thể vào trang Help để xem đầy đủ hướng dẫn và chính sách quyền truy cập.`;
+  }
+
+  return null;
+}
+
+function fallbackAnswer(
+  question: string,
+  context: string,
+  knowledgeChunks: Array<{ source: string; snippet: string; content: string }>,
+) {
+  const normalizedQuestion = question.trim().toLowerCase();
+
+  if (/\bbạn là ai\b|who are you|ban la ai/.test(normalizedQuestion)) {
+    return "Mình là BudgetFlow AI Assistant, hỗ trợ tra cứu ngân sách, giao dịch, phê duyệt, báo cáo và hướng dẫn thao tác trong hệ thống. Bạn có thể vào trang Help để xem hướng dẫn chi tiết theo từng chức năng.";
+  }
+
+  const processAnswer = buildProcessAnswerFromChunks(question, knowledgeChunks);
+  if (processAnswer) {
+    return processAnswer;
+  }
+
+  if (!context.trim()) {
+    return "Hiện chưa có nguồn tài liệu nội bộ đủ để trả lời trực tiếp câu hỏi này. Bạn có thể vào trang Help để xem hướng dẫn thao tác và chính sách quyền truy cập.";
+  }
+
+  return `Mình đã tra cứu tài liệu nội bộ cho câu hỏi \"${question}\". Bạn có thể vào trang Help để xem hướng dẫn chi tiết và chính sách quyền truy cập.`;
 }
 
 export async function resolveByRag(
@@ -58,13 +139,15 @@ export async function resolveByRag(
   const role = auth?.role ?? "EMPLOYEE";
   const conversationContext = buildConversationContext(options?.conversationMessages ?? []);
   const corpusVersion = await getKnowledgeCorpusVersion();
+  const ragResponseVersion = "rag-response-v4";
+  const cacheCorpusVersion = `${ragResponseVersion}:${corpusVersion}`;
   const contextDigest = hash(conversationContext || "none");
 
   const cached = await getRagCache({
     role,
     message: question,
     contextDigest,
-    corpusVersion,
+    corpusVersion: cacheCorpusVersion,
   });
   if (cached) {
     return cached;
@@ -82,9 +165,18 @@ export async function resolveByRag(
     .join("\n\n")
     .slice(0, 12000);
 
-  const systemPrompt = auth ? buildSystemPrompt(auth) : undefined;
-  const prompt = buildRagPrompt(question, context, systemPrompt, conversationContext);
-  const answer = (await generateWithGemini(prompt)) ?? fallbackAnswer(question, context);
+  const processAnswer =
+    buildProcessAnswerFromChunks(question, knowledgeChunks) ??
+    buildProcessAnswerFromStaticContext(question, staticContext);
+
+  let answer: string;
+  if (processAnswer) {
+    answer = processAnswer;
+  } else {
+    const systemPrompt = auth ? buildSystemPrompt(auth) : undefined;
+    const prompt = buildRagPrompt(question, context, systemPrompt, conversationContext);
+    answer = (await generateWithGemini(prompt)) ?? fallbackAnswer(question, context, knowledgeChunks);
+  }
 
   const citationsFromKnowledge: AiCitation[] = knowledgeChunks.map((item) => ({
     source: item.source,
@@ -114,7 +206,7 @@ export async function resolveByRag(
       role,
       message: question,
       contextDigest,
-      corpusVersion,
+      corpusVersion: cacheCorpusVersion,
     },
     result,
   );

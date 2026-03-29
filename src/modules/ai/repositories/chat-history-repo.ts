@@ -178,12 +178,16 @@ export async function archiveChatSession(userId: string, sessionId: string): Pro
   const db = delegates();
 
   const existing = await db.chatSession.findFirst({
-    where: { id: sessionId, userId, archived: false },
-    select: { id: true },
+    where: { id: sessionId, userId },
+    select: { id: true, archived: true },
   });
 
   if (!existing) {
     throw new AppError("Chat session not found", "NOT_FOUND");
+  }
+
+  if (existing.archived) {
+    return { id: sessionId, archived: true };
   }
 
   await db.chatSession.update({

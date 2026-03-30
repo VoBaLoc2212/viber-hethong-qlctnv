@@ -259,7 +259,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
             <h4 className="mb-1 text-sm font-semibold">Cần hỗ trợ?</h4>
             <p className="mb-3 text-xs text-muted-foreground">Xem tài liệu hoặc liên hệ bộ phận hỗ trợ.</p>
             <Button asChild variant="outline" className="w-full text-xs" size="sm">
-              <Link href="/help">Tài liệu</Link>
+              <Link href="/HUONG_DAN_SU_DUNG_WEBSITE.pdf" target="_blank" rel="noopener noreferrer">
+                Tài liệu
+              </Link>
             </Button>
           </div>
         </div>

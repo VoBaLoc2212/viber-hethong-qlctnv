@@ -1,0 +1,370 @@
+{
+  "version": "1.0.0",
+  "roles": [
+    "EMPLOYEE",
+    "MANAGER",
+    "ACCOUNTANT",
+    "FINANCE_ADMIN",
+    "AUDITOR"
+  ],
+  "categories": [
+    "COMMON",
+    "SERVICE_DATA",
+    "TEXT2SQL",
+    "RAG_KB"
+  ],
+  "questions": [
+    {
+      "id": "common-greeting",
+      "category": "COMMON",
+      "severity": "required",
+      "smoke": true,
+      "prompt": "Xin chào",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE", "RAG"],
+          "policyKey": "generic",
+          "dataDomain": "GENERAL",
+          "scopeApplied": "generic-assistant-scope"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "common-capability",
+      "category": "COMMON",
+      "severity": "required",
+      "smoke": true,
+      "prompt": "Tôi có những quyền nào và bạn có thể làm gì?",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE", "RAG"],
+          "policyKey": "generic",
+          "dataDomain": "GENERAL",
+          "scopeApplied": "generic-assistant-scope"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-budget-count",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": true,
+      "prompt": "How many budget records are there by department?",
+      "appliesToRoles": ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "budgets",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-transactions-count",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "Có bao nhiêu giao dịch gần đây?",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "transactions",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-kpi-summary",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "Tổng chi tổng thu số dư hiện tại",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "reports",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "text2sql-fx-latest",
+      "category": "TEXT2SQL",
+      "severity": "required",
+      "smoke": true,
+      "prompt": "list latest usd vnd fx rate records from fxrate table token {{TS_TOKEN}}",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "fx-management",
+          "dataDomain": "DATA_RUNTIME"
+        },
+        "FINANCE_ADMIN": {
+          "allowedRoutes": ["TEXT2SQL"],
+          "policyKey": "fx-management",
+          "dataDomain": "DATA_RUNTIME",
+          "scopeApplied": "fx-admin-scope"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true,
+        "requireSqlSelectForRoles": ["FINANCE_ADMIN"]
+      }
+    },
+    {
+      "id": "text2sql-fx-average",
+      "category": "TEXT2SQL",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "show average usd vnd fx_rate in current month token {{TS_TOKEN}}",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "fx-management",
+          "dataDomain": "DATA_RUNTIME"
+        },
+        "FINANCE_ADMIN": {
+          "allowedRoutes": ["TEXT2SQL"],
+          "policyKey": "fx-management",
+          "dataDomain": "DATA_RUNTIME",
+          "scopeApplied": "fx-admin-scope"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true,
+        "requireSqlSelectForRoles": ["FINANCE_ADMIN"]
+      }
+    },
+    {
+      "id": "rag-kb-steps",
+      "category": "RAG_KB",
+      "severity": "required",
+      "smoke": true,
+      "prompt": "Dựa trên tài liệu KB có token {{KB_TOKEN}}, quy trình phê duyệt chi phí gồm những bước nào?",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["RAG"],
+          "policyKey": "generic",
+          "dataDomain": "GENERAL",
+          "scopeApplied": "generic-assistant-scope"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true,
+        "requireCitations": true,
+        "citationSourceIncludesAny": ["{{KB_FILENAME}}"]
+      }
+    },
+    {
+      "id": "rag-kb-token-check",
+      "category": "RAG_KB",
+      "severity": "informational",
+      "smoke": false,
+      "prompt": "Tóm tắt ngắn nội dung tài liệu KB token {{KB_TOKEN}}",
+      "appliesToRoles": ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["RAG"],
+          "policyKey": "generic",
+          "dataDomain": "GENERAL",
+          "scopeApplied": "generic-assistant-scope"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true,
+        "requireCitations": true,
+        "citationSourceIncludesAny": ["{{KB_FILENAME}}"]
+      }
+    },
+    {
+      "id": "service-approvals-sales-pending",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "Phòng Sales hiện có bao nhiêu yêu cầu phê duyệt đang chờ xử lý?",
+      "appliesToRoles": ["MANAGER", "ACCOUNTANT"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "approvals",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-reimbursements-settlement",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "Danh sách hoàn ứng đang chờ review settlement của phòng Marketing là gì?",
+      "appliesToRoles": ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "reimbursements",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-budget-alert-it",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "Phòng IT có ngân sách nào đang chạm ngưỡng cảnh báo 80% không?",
+      "appliesToRoles": ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "budgets",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-cashbook-balance-finance",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "Số dư quỹ hiện tại và 5 posting gần nhất của phòng Finance là gì?",
+      "appliesToRoles": ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "ACCOUNTANT": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "cashbook",
+          "dataDomain": "DATA_RUNTIME"
+        },
+        "FINANCE_ADMIN": {
+          "allowedRoutes": ["SERVICE", "TEXT2SQL"],
+          "policyKey": "cashbook",
+          "dataDomain": "DATA_RUNTIME"
+        },
+        "AUDITOR": {
+          "allowedRoutes": ["SERVICE", "TEXT2SQL"],
+          "policyKey": "cashbook",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-reports-quarter-marketing",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "So sánh ngân sách và chi thực tế của phòng Marketing trong Q1 năm nay.",
+      "appliesToRoles": ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "*": {
+          "allowedRoutes": ["SERVICE", "TEXT2SQL"],
+          "policyKey": "reports",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "service-security-logs-finance",
+      "category": "SERVICE_DATA",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "Cho tôi các bản ghi nhật ký bảo mật liên quan approval trong 7 ngày qua.",
+      "appliesToRoles": ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"],
+      "expectedByRole": {
+        "ACCOUNTANT": {
+          "allowedRoutes": ["SERVICE"],
+          "policyKey": "security-logs",
+          "dataDomain": "DATA_RUNTIME"
+        },
+        "FINANCE_ADMIN": {
+          "allowedRoutes": ["SERVICE", "TEXT2SQL"],
+          "policyKey": "security-logs",
+          "dataDomain": "DATA_RUNTIME"
+        },
+        "AUDITOR": {
+          "allowedRoutes": ["SERVICE", "TEXT2SQL"],
+          "policyKey": "security-logs",
+          "dataDomain": "DATA_RUNTIME"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true
+      }
+    },
+    {
+      "id": "text2sql-fx-procurement-admin",
+      "category": "TEXT2SQL",
+      "severity": "required",
+      "smoke": false,
+      "prompt": "show usd vnd fx trend for procurement department this month token {{TS_TOKEN}}",
+      "appliesToRoles": ["FINANCE_ADMIN"],
+      "expectedByRole": {
+        "FINANCE_ADMIN": {
+          "allowedRoutes": ["TEXT2SQL"],
+          "policyKey": "fx-management",
+          "dataDomain": "DATA_RUNTIME",
+          "scopeApplied": "fx-admin-scope"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true,
+        "requireSqlSelectForRoles": ["FINANCE_ADMIN"]
+      }
+    },
+    {
+      "id": "rag-user-management-policy-admin",
+      "category": "RAG_KB",
+      "severity": "informational",
+      "smoke": false,
+      "prompt": "Chính sách quản lý người dùng và phân quyền hiện tại của hệ thống là gì?",
+      "appliesToRoles": ["FINANCE_ADMIN"],
+      "expectedByRole": {
+        "FINANCE_ADMIN": {
+          "allowedRoutes": ["RAG"],
+          "policyKey": "user-management",
+          "dataDomain": "PROCESS_POLICY",
+          "scopeApplied": "user-management-policy"
+        }
+      },
+      "assertions": {
+        "requireNonEmptyAnswer": true,
+        "requireCitations": true
+      }
+    }
+  ]
+}

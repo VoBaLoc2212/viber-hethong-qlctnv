@@ -11,9 +11,9 @@ import type { AiIntent, AiResolution } from "../types";
 import { resolveAiPolicy } from "./ai-policy";
 
 const REPORT_ROLES = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] as const;
-const SERVICE_DATA_PATTERN = /chi phí|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký|tổng thu|tổng chi|tổng ngân sách|số dư|doanh số|thu hiện tại|chi hiện tại/i;
-const NORMALIZED_SERVICE_DATA_PATTERN = /chi phi|ngan?\s*sach|giao dich|expense|income|approval|phe duyet|phong ban|department|bao cao|report|doanh thu|fx|ty gia|usd|vnd|q[1-4]|quy|thang|nam|kpi|danh muc|audit|log|nhat ky|tong thu|tong chi|tong ngan sach|so du|doanh so|thu hien tai|chi hien tai|budget/i;
-const KPI_SUMMARY_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại/i;
+const SERVICE_DATA_PATTERN = /chi phí|chi tiêu|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký|tổng thu|tổng chi|tổng ngân sách|số dư|doanh số|thu hiện tại|chi hiện tại|thu chi hiện tại|lịch sử|history/i;
+const NORMALIZED_SERVICE_DATA_PATTERN = /chi phi|chi tieu|ngan?\s*sach|giao dich|expense|income|approval|phe duyet|phong ban|department|bao cao|report|doanh thu|fx|ty gia|usd|vnd|q[1-4]|quy|thang|nam|kpi|danh muc|audit|log|nhat ky|tong thu|tong chi|tong ngan sach|so du|doanh so|thu hien tai|chi hien tai|thu chi hien tai|lich su|history|budget/i;
+const KPI_SUMMARY_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại|thu hiện tại|chi hiện tại|thu chi hiện tại|current income|current expense|current cashflow/i;
 const QUANTITY_PATTERN = /co\s*bao\s*nhieu|bao\s*nhieu|so\s*luong|count|may/i;
 const MONEY_AMOUNT_PATTERN = /bao\s*nhieu\s*tien|bao\s*nhieu\s*vnd|so\s*tien|tong\s*ngan\s*sach|tong\s*chi|tong\s*thu|so\s*du|con\s*bao\s*nhieu|con\s*lai|con\s*kha\s*dung|remaining|available/i;
 
@@ -102,6 +102,26 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
     });
   }
 
+  if (/quyen|vai tro|role|permission|co the lam gi|what can you do|ban co the lam gi/i.test(normalizedText)) {
+    const capabilityByRole: Record<AuthContext["role"], string[]> = {
+      EMPLOYEE: ["Tạo giao dịch trong phạm vi được cấp", "Theo dõi hoàn ứng và trạng thái phê duyệt", "Tra cứu hướng dẫn sử dụng"],
+      MANAGER: ["Duyệt yêu cầu thuộc phạm vi quản lý", "Xem báo cáo và KPI theo phạm vi", "Tra cứu ngân sách/phê duyệt liên quan"],
+      ACCOUNTANT: ["Xử lý phê duyệt nghiệp vụ kế toán", "Theo dõi sổ quỹ, nhật ký và đối soát", "Tra cứu báo cáo và giao dịch theo quyền"],
+      FINANCE_ADMIN: ["Xem toàn cục ngân sách/thu chi theo chính sách", "Truy vấn dữ liệu runtime qua SERVICE/Text2SQL trong phạm vi quyền", "Quản trị vận hành tài chính và cấu hình liên quan"],
+      AUDITOR: ["Đọc dữ liệu phục vụ kiểm toán theo quyền", "Tra cứu nhật ký và báo cáo được cấp", "Xem tài liệu chính sách/quy trình"],
+    };
+
+    const actions = capabilityByRole[auth.role] ?? capabilityByRole.EMPLOYEE;
+
+    return withPolicy({
+      intent,
+      routeUsed: "SERVICE",
+      rawAnswer: `Vai trò hiện tại của bạn là ${auth.role}. Bạn có thể: ${actions.map((item, index) => `${index + 1}) ${item}`).join("; ")}.`,
+      citations: [{ source: "rbac-policy", snippet: `capability-summary-${auth.role.toLowerCase()}` }],
+      suggestedActions: ["Hỏi rõ theo nghiệp vụ: thu/chi, ngân sách, phê duyệt, báo cáo", "Yêu cầu kiểm tra quyền nếu thao tác bị chặn"],
+    });
+  }
+
   if (intent === "GUIDANCE") {
     return null;
   }
@@ -132,6 +152,11 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
   }
 
   if (intent === "FORECAST" && canUseReport(auth)) {
+    const isFxQuestion = /fx|ty\s*gia|usd|vnd|exchange\s*rate/.test(normalizedText);
+    if (isFxQuestion) {
+      return null;
+    }
+
     const overview = await tryService(() => getReportsOverview(auth, {}));
     if (!overview) return null;
 

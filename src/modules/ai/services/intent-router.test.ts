@@ -1,8 +1,30 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { isLikelyServiceDataQuestion, normalizeIntent, ruleBasedIntent } from "./intent-router";
+const { generateWithGeminiMock, getIntentCacheMock, setIntentCacheMock } = vi.hoisted(() => ({
+  generateWithGeminiMock: vi.fn(),
+  getIntentCacheMock: vi.fn(),
+  setIntentCacheMock: vi.fn(),
+}));
+
+vi.mock("./gemini-client", () => ({
+  generateWithGemini: generateWithGeminiMock,
+}));
+
+vi.mock("./memory-service", () => ({
+  getIntentCache: getIntentCacheMock,
+  setIntentCache: setIntentCacheMock,
+}));
+
+import { isLikelyServiceDataQuestion, normalizeIntent, resolveIntent, ruleBasedIntent } from "./intent-router";
 
 describe("intent-router", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getIntentCacheMock.mockResolvedValue(null);
+    setIntentCacheMock.mockResolvedValue(undefined);
+    generateWithGeminiMock.mockResolvedValue(null);
+  });
+
   it("detects GREETING intent", () => {
     expect(ruleBasedIntent("hello")).toBe("GREETING");
     expect(ruleBasedIntent("xin chào")).toBe("GREETING");
@@ -33,6 +55,19 @@ describe("intent-router", () => {
 
   it("detects ANALYSIS intent from compare questions", () => {
     expect(ruleBasedIntent("So sánh chi phí Q1 vs Q2")).toBe("ANALYSIS");
+  });
+
+  it("keeps mixed greeting + data question in QUERY", () => {
+    expect(ruleBasedIntent("Xin chào, tổng chi tháng này là bao nhiêu?")).toBe("QUERY");
+  });
+
+  it("does not classify generic top keyword as ANALYSIS", () => {
+    expect(ruleBasedIntent("top cái gì vậy")).toBe("QUERY");
+    expect(ruleBasedIntent("top danh mục chi phí quý này")).toBe("ANALYSIS");
+  });
+
+  it("classifies hard-stop timeline question as FORECAST", () => {
+    expect(ruleBasedIntent("Nếu giữ tốc độ chi hiện tại, khi nào ngân sách IT chạm hard stop?")).toBe("FORECAST");
   });
 
   it("falls back to QUERY", () => {
@@ -68,7 +103,7 @@ describe("intent-router", () => {
       { q: "So sánh chi phí Q1 vs Q2 theo phòng ban.", intent: "ANALYSIS", serviceData: true },
       { q: "Vì sao chi phí tháng này tăng so với tháng trước?", intent: "ANALYSIS", serviceData: true },
       { q: "Dựa trên recurring transactions, dự báo chi phí tháng tới theo tuần.", intent: "FORECAST", serviceData: true },
-      { q: "Nếu giữ tốc độ chi hiện tại, khi nào ngân sách IT chạm hard stop?", intent: "GUIDANCE", serviceData: true },
+      { q: "Nếu giữ tốc độ chi hiện tại, khi nào ngân sách IT chạm hard stop?", intent: "FORECAST", serviceData: true },
       { q: "Phòng nào sắp vượt ngân sách?", intent: "ALERT", serviceData: true },
       { q: "Có approval nào bị treo quá 3 ngày không?", intent: "ALERT", serviceData: true },
       { q: "Làm sao để tạo yêu cầu chi?", intent: "GUIDANCE", serviceData: false },
@@ -83,5 +118,42 @@ describe("intent-router", () => {
       expect(ruleBasedIntent(row.q)).toBe(row.intent);
       expect(isLikelyServiceDataQuestion(row.q)).toBe(row.serviceData);
     }
+  });
+
+  it("respects cache and skips model call", async () => {
+    getIntentCacheMock.mockResolvedValue({ intent: "ALERT" });
+
+    const result = await resolveIntent("u1", "Phòng nào sắp vượt ngân sách?");
+
+    expect(result).toBe("ALERT");
+    expect(generateWithGeminiMock).not.toHaveBeenCalled();
+    expect(setIntentCacheMock).not.toHaveBeenCalled();
+  });
+
+  it("uses model for QUERY and stores resolved intent", async () => {
+    generateWithGeminiMock.mockResolvedValue("ANALYSIS");
+
+    const result = await resolveIntent("u1", "chi phí tăng vì sao");
+
+    expect(result).toBe("ANALYSIS");
+    expect(setIntentCacheMock).toHaveBeenCalledWith("u1", "chi phí tăng vì sao", "ANALYSIS");
+  });
+
+  it("allows model override for ambiguous non-QUERY pair", async () => {
+    generateWithGeminiMock.mockResolvedValue("ANALYSIS");
+
+    const message = "quy trình phê duyệt có điểm nghẽn ở đâu";
+    const result = await resolveIntent("u1", message);
+
+    expect(ruleBasedIntent(message)).toBe("GUIDANCE");
+    expect(result).toBe("ANALYSIS");
+  });
+
+  it("keeps ruled intent for non-ambiguous non-QUERY mismatch", async () => {
+    generateWithGeminiMock.mockResolvedValue("QUERY");
+
+    const result = await resolveIntent("u1", "Phòng nào sắp vượt ngân sách?");
+
+    expect(result).toBe("ALERT");
   });
 });

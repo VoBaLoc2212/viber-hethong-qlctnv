@@ -124,6 +124,21 @@ describe("chat-orchestrator routing", () => {
     expect(resolveByText2SqlMock).not.toHaveBeenCalled();
   });
 
+  it("keeps SERVICE for capability question instead of forcing RAG", async () => {
+    resolveIntentMock.mockResolvedValue("GUIDANCE" as AiIntent);
+    resolveByServiceMock.mockResolvedValue({
+      intent: "GUIDANCE",
+      routeUsed: "SERVICE",
+      rawAnswer: "Vai trò hiện tại của bạn là MANAGER...",
+      citations: [{ source: "rbac-policy", snippet: "capability-summary-manager" }],
+    } satisfies AiResolution);
+
+    const result = await handleAiChat(buildInput("Tôi có những quyền nào và bạn có thể làm gì?"));
+
+    expect(result.routeUsed).toBe("SERVICE");
+    expect(resolveByRagMock).not.toHaveBeenCalled();
+  });
+
   it("falls back to TEXT2SQL when service misses and RAG looks insufficient", async () => {
     resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
     resolveByServiceMock.mockResolvedValue(null);
@@ -142,6 +157,21 @@ describe("chat-orchestrator routing", () => {
     expect(resolveByText2SqlMock).toHaveBeenCalledTimes(1);
     expect(result.routeUsed).toBe("TEXT2SQL");
     expect(result.answer).toBe("Tổng chi hiện tại là 123 VND");
+  });
+
+  it("prefers TEXT2SQL first for runtime data analysis question", async () => {
+    resolveIntentMock.mockResolvedValue("ANALYSIS" as AiIntent);
+    resolveByServiceMock.mockResolvedValue(null);
+    resolveByText2SqlMock.mockResolvedValue({
+      answer: "Đã truy vấn 10 dòng dữ liệu phù hợp.",
+      citations: [{ source: "text2sql", snippet: "SELECT" }],
+      relatedData: { sql: "SELECT * FROM Transaction LIMIT 10", rows: Array(10).fill({}) },
+    });
+
+    const result = await handleAiChat(buildInput("Báo cáo lịch sử chi theo ngày trong tháng này"));
+
+    expect(result.routeUsed).toBe("TEXT2SQL");
+    expect(resolveByRagMock).not.toHaveBeenCalled();
   });
 
   it("falls back to RAG when TEXT2SQL throws", async () => {

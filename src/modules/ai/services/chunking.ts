@@ -2,7 +2,12 @@ const DEFAULT_CHUNK_SIZE = 1000;
 const DEFAULT_OVERLAP = 180;
 
 export function chunkText(input: string, chunkSize = DEFAULT_CHUNK_SIZE, overlap = DEFAULT_OVERLAP): string[] {
-  const text = input.replace(/\s+/g, " ").trim();
+  const text = input
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[\t ]+/g, " ").trim())
+    .join("\n")
+    .trim();
   if (!text) {
     return [];
   }

@@ -28,19 +28,49 @@ function buildConversationContext(messages: Array<{ role: string; content: strin
     .slice(0, 2400);
 }
 
-async function loadStaticContext() {
+async function loadStaticContext(): Promise<{ context: string; citations: AiCitation[] }> {
   const chunks = await Promise.all(
     DOC_PATHS.map(async (path) => {
       try {
         const content = await readFile(path, "utf-8");
-        return `# ${path.split(/[\\/]/).pop()}\n${content}`;
+        const fileName = path.split(/[\\/]/).pop() ?? path;
+        return {
+          context: `# ${fileName}\n${content}`,
+          citation: {
+            source: `docs/${fileName}`,
+            snippet: `Static context from ${fileName}`,
+          } satisfies AiCitation,
+        };
       } catch {
-        return "";
+        return null;
       }
     }),
   );
 
-  return chunks.filter(Boolean).join("\n\n");
+  const ready = chunks.filter((item): item is { context: string; citation: AiCitation } => Boolean(item));
+  return {
+    context: ready.map((item) => item.context).join("\n\n"),
+    citations: ready.map((item) => item.citation),
+  };
+}
+
+function extractStepLines(content: string) {
+  const byLine = content
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => /^(bước|buoc)\s*\d+\s*:/i.test(line));
+
+  if (byLine.length > 0) {
+    return byLine.slice(0, 5);
+  }
+
+  const flattenedMatches = [...content.matchAll(/(?:^|\s)((?:bước|buoc)\s*\d+\s*:[^\n]*?)(?=(?:\s(?:bước|buoc)\s*\d+\s*:)|$)/gi)]
+    .map((match) => (match[1] ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 5);
+
+  return flattenedMatches;
 }
 
 function buildProcessAnswerFromChunks(
@@ -61,9 +91,7 @@ function buildProcessAnswerFromChunks(
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
-  const stepLines = lines
-    .filter((line) => /^(bước|buoc)\s*\d+\s*:/i.test(line))
-    .slice(0, 5);
+  const stepLines = extractStepLines(preferredChunk.content);
 
   if (stepLines.length > 0) {
     return `${stepLines.join(" ")} Bạn có thể vào trang Help để xem đầy đủ hướng dẫn và chính sách quyền truy cập.`;
@@ -153,21 +181,27 @@ export async function resolveByRag(
     return cached;
   }
 
-  const knowledgeChunks = await searchKnowledgeChunks(`${question}\n${conversationContext}`, 8);
-  const staticContext = await loadStaticContext();
+  const knowledgeChunks = await searchKnowledgeChunks(`${question}\n${conversationContext}`, 8, { minScore: 2 });
+  const { context: staticContext, citations: staticCitations } = await loadStaticContext();
+
+  const citationsFromKnowledge: AiCitation[] = knowledgeChunks.map((item) => ({
+    source: item.source,
+    snippet: item.snippet,
+  }));
+  const hasKnowledgeEvidence = knowledgeChunks.length > 0;
 
   const retrievedContext = knowledgeChunks
     .map((item, index) => `# Chunk ${index + 1} (${item.source} - ${item.snippet})\n${item.content}`)
     .join("\n\n");
 
-  const context = [retrievedContext, staticContext]
+  const context = [retrievedContext, hasKnowledgeEvidence ? "" : staticContext]
     .filter(Boolean)
     .join("\n\n")
     .slice(0, 12000);
 
   const processAnswer =
     buildProcessAnswerFromChunks(question, knowledgeChunks) ??
-    buildProcessAnswerFromStaticContext(question, staticContext);
+    buildProcessAnswerFromStaticContext(question, hasKnowledgeEvidence ? "" : staticContext);
 
   let answer: string;
   if (processAnswer) {
@@ -178,27 +212,7 @@ export async function resolveByRag(
     answer = (await generateWithGemini(prompt)) ?? fallbackAnswer(question, context, knowledgeChunks);
   }
 
-  const citationsFromKnowledge: AiCitation[] = knowledgeChunks.map((item) => ({
-    source: item.source,
-    snippet: item.snippet,
-  }));
-
-  const citationsFromDocs: AiCitation[] = [
-    {
-      source: "docs/context.md",
-      snippet: "Project overview, modules, API, auth, and usage notes",
-    },
-    {
-      source: "docs/AI_RULES.md",
-      snippet: "AI policy, endpoint contract, and UAT prompts",
-    },
-    {
-      source: "docs/BUSINESS_FLOW.md",
-      snippet: "Business workflow and approval flow",
-    },
-  ];
-
-  const citations = [...citationsFromKnowledge, ...citationsFromDocs].slice(0, 8);
+  const citations = (hasKnowledgeEvidence ? citationsFromKnowledge : staticCitations).slice(0, 8);
 
   const result = { answer, citations };
   await setRagCache(

@@ -126,6 +126,14 @@ describe("service-adapter budget routing", () => {
     expect(result?.rawAnswer).toContain("còn khả dụng");
   });
 
+  it("resolves capability question via SERVICE", async () => {
+    const result = await resolveByService(auth, "GUIDANCE", "toi co the lam gi va quyen cua toi la gi");
+
+    expect(result?.routeUsed).toBe("SERVICE");
+    expect(result?.rawAnswer).toContain("Vai trò hiện tại");
+    expect(result?.citations[0].source).toBe("rbac-policy");
+  });
+
   it("keeps generic non-service query unresolved", async () => {
     const result = await resolveByService(auth, "QUERY", "ban la ai");
 

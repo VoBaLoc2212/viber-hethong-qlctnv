@@ -238,10 +238,35 @@ export async function getKnowledgeCorpusVersion(): Promise<string> {
   return `${count}-${ts}`;
 }
 
-export async function searchKnowledgeChunks(query: string, limit = 8): Promise<Array<{ source: string; snippet: string; content: string }>> {
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+function scoreChunk(content: string, keywords: string[], normalizedKeywords: string[]) {
+  const lower = content.toLowerCase();
+  const normalized = normalizeSearchText(content);
+  const directScore = keywords.reduce((acc, token) => (lower.includes(token) ? acc + 1 : acc), 0);
+  const normalizedScore = normalizedKeywords.reduce((acc, token) => (normalized.includes(token) ? acc + 1 : acc), 0);
+  return directScore + normalizedScore;
+}
+
+export async function searchKnowledgeChunks(
+  query: string,
+  limit = 8,
+  options?: { minScore?: number },
+): Promise<Array<{ source: string; snippet: string; content: string }>> {
   const db = delegates();
+  const safeLimit = Math.max(1, Math.min(limit, 12));
   const keywords = query
     .toLowerCase()
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3)
+    .slice(0, 8);
+  const normalizedKeywords = normalizeSearchText(query)
     .split(/\s+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 3)
@@ -256,9 +281,9 @@ export async function searchKnowledgeChunks(query: string, limit = 8): Promise<A
         document: { is: { status: "READY" } },
       };
 
-  const rows = await db.knowledgeChunk.findMany({
+  let rows = await db.knowledgeChunk.findMany({
     where,
-    take: Math.max(1, Math.min(limit * 4, 64)),
+    take: Math.max(1, Math.min(safeLimit * 4, 64)),
     orderBy: [{ createdAt: "desc" }],
     select: {
       content: true,
@@ -271,19 +296,50 @@ export async function searchKnowledgeChunks(query: string, limit = 8): Promise<A
     },
   });
 
-  const scored = rows.map((row) => {
-    const lower = row.content.toLowerCase();
-    const score = keywords.reduce((acc, token) => (lower.includes(token) ? acc + 1 : acc), 0);
-    return {
-      score,
-      source: row.document.fileName,
-      snippet: `chunk #${row.chunkIndex}`,
-      content: row.content,
-    };
-  });
+  const scoredPrimary = rows.map((row) => ({
+    score: scoreChunk(row.content, keywords, normalizedKeywords),
+    source: row.document.fileName,
+    snippet: `chunk #${row.chunkIndex}`,
+    content: row.content,
+  }));
+
+  const hasStrongPrimary = scoredPrimary.some((row) => row.score > 0);
+
+  if (!hasStrongPrimary) {
+    rows = await db.knowledgeChunk.findMany({
+      where: { document: { is: { status: "READY" } } },
+      take: Math.max(16, Math.min(safeLimit * 8, 80)),
+      orderBy: [{ createdAt: "desc" }],
+      select: {
+        content: true,
+        chunkIndex: true,
+        document: {
+          select: {
+            fileName: true,
+          },
+        },
+      },
+    });
+  }
+
+  const scored = rows.map((row) => ({
+    score: scoreChunk(row.content, keywords, normalizedKeywords),
+    source: row.document.fileName,
+    snippet: `chunk #${row.chunkIndex}`,
+    content: row.content,
+  }));
+
+  const topScore = scored.reduce((max, row) => (row.score > max ? row.score : max), 0);
+  if (topScore <= 0) {
+    return [];
+  }
+
+  const requestedMinScore = Math.max(1, options?.minScore ?? 1);
+  const dynamicMinScore = Math.max(requestedMinScore, Math.floor(topScore * 0.4));
 
   return scored
     .sort((a, b) => b.score - a.score)
-    .slice(0, Math.max(1, Math.min(limit, 12)))
+    .filter((row) => row.score >= dynamicMinScore)
+    .slice(0, safeLimit)
     .map(({ source, snippet, content }) => ({ source, snippet, content }));
 }

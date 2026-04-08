@@ -413,11 +413,18 @@ export function useApprovalAction(opts?: {
   >;
 }) {
   return useMutation({
-    mutationFn: ({ id, data }) =>
-      fetchJson<ApprovalItem>(`/api/approvals/${id}`, {
+    mutationFn: ({ id, data }) => {
+      const headers: Record<string, string> = {};
+      if (data.action === "execute") {
+        headers["idempotency-key"] = createIdempotencyKey("approval-execute");
+      }
+
+      return fetchJson<ApprovalItem>(`/api/approvals/${id}`, {
         method: "PATCH",
+        headers,
         body: JSON.stringify(data),
-      }),
+      });
+    },
     ...(opts?.mutation ?? {}),
   });
 }

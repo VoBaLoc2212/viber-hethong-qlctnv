@@ -7,10 +7,9 @@ import {
   type UseQueryOptions,
 } from "@tanstack/react-query";
 
-import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
 
 export type TransactionType = "INCOME" | "EXPENSE";
-export type TransactionStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type TransactionStatus = "DRAFT" | "PENDING" | "APPROVED" | "EXECUTED" | "REJECTED" | "REVERSED";
 export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ReimbursementStatus =
   | "PENDING_APPROVAL"
@@ -31,12 +30,12 @@ export type Department = {
 };
 
 export type Transaction = {
-  id: number;
+  id: string;
   transactionCode: string;
   type: TransactionType;
   amount: number;
-  categoryId: number | null;
-  departmentId: number | null;
+  categoryId: string | null;
+  departmentId: string | null;
   departmentName: string | null;
   date: string;
   description: string | null;
@@ -45,7 +44,7 @@ export type Transaction = {
 };
 
 export type AppUser = {
-  id: number;
+  id: string;
   fullName: string;
   email: string;
   role: UserRole;
@@ -98,13 +97,13 @@ export type ReimbursementItem = {
 };
 
 export type NotificationItem = {
-  id: number;
-  recipientId: number;
+  id: string;
+  recipientId: string;
   type: string;
   title: string;
   message: string;
   referenceType: string | null;
-  referenceId: number | null;
+  referenceId: string | null;
   isRead: boolean;
   createdAt: string;
 };
@@ -166,15 +165,14 @@ export type GetFxRatesParams = {
 };
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) : null;
   const res = await fetch(url, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
     cache: "no-store",
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -196,7 +194,9 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-export function useGetDepartments(options?: UseQueryOptions<Department[]>) {
+export function useGetDepartments(
+  options?: Omit<UseQueryOptions<Department[]>, "queryKey" | "queryFn">,
+) {
   return useQuery({
     queryKey: ["/api/departments"],
     queryFn: async () => {
@@ -221,7 +221,7 @@ export type GetTransactionsParams = {
   limit?: number;
   type?: TransactionType;
   status?: TransactionStatus;
-  departmentId?: number;
+  departmentId?: string;
   q?: string;
 };
 
@@ -249,8 +249,8 @@ export type CreateTransactionInput = {
   type: TransactionType;
   amount: number;
   description?: string;
-  departmentId?: number;
-  categoryId?: number;
+  departmentId?: string;
+  categoryId?: string;
   date: string;
   status?: TransactionStatus;
 };
@@ -269,7 +269,7 @@ export function useCreateTransaction(opts?: {
 }
 
 export function useUpdateTransactionStatus(opts?: {
-  mutation?: UseMutationOptions<Transaction, Error, { id: number; data: { status: TransactionStatus } }>;
+  mutation?: UseMutationOptions<Transaction, Error, { id: string; data: { status: TransactionStatus } }>;
 }) {
   return useMutation({
     mutationFn: ({ id, data }) =>
@@ -291,7 +291,9 @@ export function useGetDashboardKpis(
   });
 }
 
-export function useGetExpensesByMonth(options?: UseQueryOptions<ExpensesByMonthRow[]>) {
+export function useGetExpensesByMonth(
+  options?: Omit<UseQueryOptions<ExpensesByMonthRow[]>, "queryKey" | "queryFn">,
+) {
   return useQuery({
     queryKey: ["/api/dashboard/expenses-by-month"],
     queryFn: async () => {
@@ -435,13 +437,12 @@ export function useGetReimbursements(
   return useQuery({
     queryKey: ["/api/reimbursements", params],
     queryFn: async () => {
-      const token = typeof window !== "undefined" ? window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) : null;
       const res = await fetch(url, {
         headers: {
           "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         cache: "no-store",
+        credentials: "include",
       });
 
       if (!res.ok) {

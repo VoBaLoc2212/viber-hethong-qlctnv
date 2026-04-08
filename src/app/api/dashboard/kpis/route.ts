@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
 import { handleApiError, requireAuth, requireRole } from "@/modules/shared";
@@ -9,25 +10,33 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth(request);
     requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
 
+    const txWhere: Prisma.TransactionWhereInput = {
+      status: {
+        notIn: ["REJECTED", "REVERSED"],
+      },
+      ...(auth.role === "EMPLOYEE" ? { createdById: auth.userId } : {}),
+    };
+
     const [departmentAgg, txAgg, pendingCount, transactionCount] = await Promise.all([
       prisma.department.aggregate({
         _sum: { budgetAllocated: true },
       }),
       prisma.transaction.groupBy({
         by: ["type"],
-        where: {
-          status: {
-            notIn: ["REJECTED", "REVERSED"],
-          },
-        },
+        where: txWhere,
         _sum: {
           amount: true,
         },
       }),
       prisma.transaction.count({
-        where: { status: "PENDING" },
+        where: {
+          ...txWhere,
+          status: "PENDING",
+        },
       }),
-      prisma.transaction.count(),
+      prisma.transaction.count({
+        where: txWhere,
+      }),
     ]);
 
     const totalBudget = Number((departmentAgg._sum.budgetAllocated ?? 0).toString());

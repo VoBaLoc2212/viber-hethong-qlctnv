@@ -1,17 +1,18 @@
 import type { NextRequest } from "next/server";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
 import { handleApiError, requireAuth, requireRole } from "@/modules/shared";
 import { ok } from "@/modules/shared/http/response";
 
 function formatMonthKey(date: Date) {
-  const y = date.getFullYear();
-  const m = date.getMonth();
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
   return `${y}-${String(m + 1).padStart(2, "0")}`;
 }
 
 function formatLabel(date: Date) {
-  return date.toLocaleString("en-US", { month: "short", year: "numeric" });
+  return date.toLocaleString("vi-VN", { month: "short", year: "numeric" });
 }
 
 export async function GET(request: NextRequest) {
@@ -19,12 +20,15 @@ export async function GET(request: NextRequest) {
     const auth = await requireAuth(request);
     requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
 
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        status: {
-          notIn: ["REJECTED", "REVERSED"],
-        },
+    const txWhere: Prisma.TransactionWhereInput = {
+      status: {
+        notIn: ["REJECTED", "REVERSED"],
       },
+      ...(auth.role === "EMPLOYEE" ? { createdById: auth.userId } : {}),
+    };
+
+    const transactions = await prisma.transaction.findMany({
+      where: txWhere,
       select: {
         type: true,
         amount: true,

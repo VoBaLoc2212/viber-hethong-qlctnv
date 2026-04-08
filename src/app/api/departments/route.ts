@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
 
     const body = await readJsonBody<{ name?: string; code?: string; budgetAllocated?: number | string }>(request);
 
-    if (!body.name || !body.code || Number(body.budgetAllocated ?? 0) <= 0) {
+    const budgetAllocated = Number(body.budgetAllocated ?? 0);
+    if (!body.name || !body.code || !Number.isFinite(budgetAllocated) || budgetAllocated <= 0) {
       throw new AppError("name, code và budgetAllocated hợp lệ là bắt buộc", "INVALID_INPUT");
     }
 
@@ -51,7 +52,7 @@ export async function POST(request: NextRequest) {
       data: {
         name: String(body.name ?? "").trim(),
         code: String(body.code ?? "").toUpperCase().trim(),
-        budgetAllocated: Number(body.budgetAllocated ?? 0).toFixed(2),
+        budgetAllocated: budgetAllocated.toFixed(2),
       },
       select: {
         id: true,

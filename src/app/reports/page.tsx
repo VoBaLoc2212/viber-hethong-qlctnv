@@ -7,7 +7,14 @@ export default function ReportsPage() {
   const { token, currentUser, initializing } = useAuthSession();
 
   if (initializing) {
-    return null;
+    return (
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Báo cáo</h1>
+          <p className="mt-1 text-muted-foreground">Đang khởi tạo phiên làm việc...</p>
+        </div>
+      </main>
+    );
   }
 
   return (

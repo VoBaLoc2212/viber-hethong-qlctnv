@@ -36,17 +36,19 @@ export async function syncExpenseToApprovals() {
 
   await prisma.approval.createMany({
     data: txns.map((t) => ({
+      id: `APR-${t.id}`,
       transactionId: t.id,
       approverId: null,
       status: statusMap[t.status] ?? "PENDING",
     })),
+    skipDuplicates: true,
   });
 
   return { synced: txns.length };
 }
 
 export async function listApprovals(auth: AuthContext, filter: ApprovalListFilter) {
-  requireRole(auth, ["MANAGER", "ACCOUNTANT"]);
+  requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
 
   const page = Number.isFinite(filter.page) && filter.page > 0 ? filter.page : 1;
   const limit = Number.isFinite(filter.limit) && filter.limit > 0 ? Math.min(filter.limit, 100) : 20;

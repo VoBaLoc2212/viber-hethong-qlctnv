@@ -213,6 +213,57 @@ export async function reverseLedgerEntry(
           });
         }
 
+        const originalPostings = await tx.cashbookPosting.findMany({
+          where: { transactionId: transaction.id },
+          select: {
+            id: true,
+            accountId: true,
+            direction: true,
+            amount: true,
+          },
+        });
+
+        const reversedCashbookPostings: Array<{ originalPostingId: string; reversalPostingId: string; accountId: string; direction: string; amount: string }> = [];
+
+        for (const posting of originalPostings) {
+          const account = await tx.cashbookAccount.findUnique({
+            where: { id: posting.accountId },
+            select: { id: true, balance: true },
+          });
+
+          if (!account) {
+            throw new AppError("Cashbook account not found", "CONFLICT");
+          }
+
+          const amount = decimalToString(posting.amount);
+          const nextDirection = posting.direction === "IN" ? "OUT" : "IN";
+          const nextBalance = nextDirection === "IN"
+            ? addMoney(decimalToString(account.balance), amount)
+            : addMoney(decimalToString(account.balance), `-${amount}`);
+
+          await tx.cashbookAccount.update({
+            where: { id: account.id },
+            data: { balance: nextBalance },
+          });
+
+          const reversalPosting = await tx.cashbookPosting.create({
+            data: {
+              accountId: posting.accountId,
+              transactionId: transaction.id,
+              direction: nextDirection,
+              amount,
+            },
+          });
+
+          reversedCashbookPostings.push({
+            originalPostingId: posting.id,
+            reversalPostingId: reversalPosting.id,
+            accountId: posting.accountId,
+            direction: nextDirection,
+            amount,
+          });
+        }
+
         await tx.transaction.update({
           where: { id: transaction.id },
           data: { status: "REVERSED" },
@@ -230,6 +281,7 @@ export async function reverseLedgerEntry(
               reversalEntryId: created.id,
               reason,
               idempotencyKey,
+              reversedCashbookPostings,
             },
           },
         });

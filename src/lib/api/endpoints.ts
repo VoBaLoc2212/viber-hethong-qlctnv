@@ -7,6 +7,7 @@ import type {
   BudgetTransferResult,
   CashbookAccountItem,
   CashbookPostingItem,
+  DashboardKpisItem,
   LedgerEntryItem,
   LoginResponse,
   RecurringTemplateItem,
@@ -29,7 +30,7 @@ export async function apiLogout() {
   });
 }
 
-export async function apiMe(token: string) {
+export async function apiMe(token?: string) {
   return apiRequest<AuthUser>("/api/auth/me", {
     token,
   });
@@ -296,16 +297,22 @@ export async function apiCreateRecurringTemplate(
   });
 }
 
-export async function apiRunRecurringTemplates(token: string) {
+export async function apiRunRecurringTemplates(token: string, idempotencyKey: string) {
   return apiRequest<{
     scanned: number;
     created: number;
     createdTransactionIds: string[];
     failures: Array<{ recurringId: string; reason: string }>;
+    replayed?: boolean;
   }>("/api/transactions/recurring/run", {
     method: "POST",
     token,
+    headers: { "idempotency-key": idempotencyKey },
   });
+}
+
+export async function apiGetDashboardKpis(token: string) {
+  return apiRequest<DashboardKpisItem>("/api/dashboard/kpis", { token });
 }
 
 export async function apiListCashbook(token: string, params?: { accountId?: string; page?: number; limit?: number }) {

@@ -326,6 +326,21 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         },
       });
 
+      const approvalStatus = status === "APPROVED" || status === "EXECUTED"
+        ? "APPROVED"
+        : status === "REJECTED" || status === "REVERSED"
+          ? "REJECTED"
+          : "PENDING";
+
+      await db.approval.create({
+        data: {
+          id: `APR-${transaction.id}`,
+          transactionId: transaction.id,
+          approverId: null,
+          status: approvalStatus,
+        },
+      }).catch(() => null);
+
       await db.budget.update({
         where: { id: budget.id },
         data: { reserved: nextReserved },
@@ -418,6 +433,21 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
         createdById: auth.userId,
       },
     });
+
+    const approvalStatus = status === "APPROVED" || status === "EXECUTED"
+      ? "APPROVED"
+      : status === "REJECTED" || status === "REVERSED"
+        ? "REJECTED"
+        : "PENDING";
+
+    await db.approval.create({
+      data: {
+        id: `APR-${transaction.id}`,
+        transactionId: transaction.id,
+        approverId: null,
+        status: approvalStatus,
+      },
+    }).catch(() => null);
 
     if (payload.splits && payload.splits.length > 0) {
       await db.transactionSplit.createMany({

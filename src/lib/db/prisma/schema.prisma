@@ -233,6 +233,7 @@ model Approval {
 
   @@index([transactionId])
   @@index([status])
+  @@unique([transactionId], map: "approval_unique_transaction")
 }
 
 model AuditLog {

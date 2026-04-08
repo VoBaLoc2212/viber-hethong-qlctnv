@@ -102,6 +102,9 @@ export default function ReimbursementPage() {
         setPurpose("");
         setAdvanceAmount("");
         qc.invalidateQueries({ queryKey: ["/api/reimbursements"] });
+        qc.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+        qc.invalidateQueries({ queryKey: ["/api/dashboard/expenses-by-month"] });
+        qc.invalidateQueries({ queryKey: ["/api/transactions"] });
       },
       onError: (err: Error) => {
         toast({ title: "Lỗi", description: err.message, variant: "destructive" });
@@ -118,6 +121,9 @@ export default function ReimbursementPage() {
         setActualAmount("");
         setReason("");
         qc.invalidateQueries({ queryKey: ["/api/reimbursements"] });
+        qc.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+        qc.invalidateQueries({ queryKey: ["/api/dashboard/expenses-by-month"] });
+        qc.invalidateQueries({ queryKey: ["/api/transactions"] });
       },
       onError: (err: Error) => {
         toast({ title: "Lỗi", description: err.message, variant: "destructive" });
@@ -226,6 +232,7 @@ export default function ReimbursementPage() {
             <Card className="p-8 text-center text-muted-foreground">Không có hồ sơ hoàn ứng nào.</Card>
           ) : (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -265,6 +272,7 @@ export default function ReimbursementPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           )}
         </TabsContent>

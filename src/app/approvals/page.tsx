@@ -121,6 +121,9 @@ export default function ApprovalsPage() {
     mutation: {
       onSuccess: () => {
         qc.invalidateQueries({ queryKey: ["/api/approvals"] });
+        qc.invalidateQueries({ queryKey: ["/api/transactions"] });
+        qc.invalidateQueries({ queryKey: ["/api/dashboard/kpis"] });
+        qc.invalidateQueries({ queryKey: ["/api/dashboard/expenses-by-month"] });
         toast({ title: "Thành công", description: "Đã cập nhật trạng thái phiếu." });
         setActionDialog(null);
         setNote("");
@@ -131,7 +134,13 @@ export default function ApprovalsPage() {
     },
   });
 
-  if (!currentUser || (currentUser.role !== "MANAGER" && currentUser.role !== "ACCOUNTANT")) {
+  if (
+    !currentUser ||
+    (currentUser.role !== "MANAGER" &&
+      currentUser.role !== "ACCOUNTANT" &&
+      currentUser.role !== "FINANCE_ADMIN" &&
+      currentUser.role !== "AUDITOR")
+  ) {
     return (
       <div className="p-6">
         <Card className="p-8 text-center text-muted-foreground">
@@ -143,6 +152,7 @@ export default function ApprovalsPage() {
 
   const isManager = currentUser.role === "MANAGER";
   const isAccountant = currentUser.role === "ACCOUNTANT";
+  const isReadOnly = currentUser.role === "FINANCE_ADMIN" || currentUser.role === "AUDITOR";
 
   function handleOpenAction(item: ApprovalItem, action: "approve" | "reject" | "execute" | "not-execute") {
     setActionDialog({ item, action });
@@ -195,6 +205,10 @@ export default function ApprovalsPage() {
         </p>
       </div>
 
+      {isReadOnly ? (
+        <Card className="p-3 text-sm text-muted-foreground">Bạn đang ở chế độ chỉ xem (không thực hiện thao tác duyệt/chi).</Card>
+      ) : null}
+
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
           <TabsTrigger value="all">Tất cả</TabsTrigger>
@@ -225,6 +239,7 @@ export default function ApprovalsPage() {
             </Card>
           ) : (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -282,6 +297,7 @@ export default function ApprovalsPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </Card>
           )}
         </TabsContent>

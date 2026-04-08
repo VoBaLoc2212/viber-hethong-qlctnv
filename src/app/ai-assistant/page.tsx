@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuthSession } from "@/components/auth-session-provider";
-import { AUTH_TOKEN_STORAGE_KEY } from "@/lib/auth/rbac";
 
 type AiCitation = {
   source: string;
@@ -45,11 +44,6 @@ type KnowledgeDocument = {
   updatedAt: string;
 };
 
-function getAuthHeader(): Record<string, string> {
-  if (typeof window === "undefined") return {};
-  const token = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 async function parseApiError(response: Response, fallback: string) {
   try {
@@ -69,12 +63,7 @@ async function parseApiError(response: Response, fallback: string) {
 }
 
 function formatAssistantMessage(content: string) {
-  return content
-    .replace(/\*\*/g, "")
-    .replace(/(\d+\.)\s{2,}/g, "$1 ")
-    .replace(/(^|\n)-\s{2,}/g, "$1- ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return content.replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export default function AiAssistantPage() {
@@ -97,7 +86,6 @@ export default function AiAssistantPage() {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(),
       },
     });
 
@@ -119,7 +107,6 @@ export default function AiAssistantPage() {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(),
       },
     });
 
@@ -140,7 +127,6 @@ export default function AiAssistantPage() {
     const response = await fetch("/api/ai/knowledge/documents", {
       cache: "no-store",
       headers: {
-        ...getAuthHeader(),
       },
     });
 
@@ -159,7 +145,6 @@ export default function AiAssistantPage() {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(),
       },
       body: JSON.stringify({}),
     });
@@ -186,7 +171,6 @@ export default function AiAssistantPage() {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeader(),
       },
     });
 
@@ -223,8 +207,7 @@ export default function AiAssistantPage() {
         method: "POST",
         cache: "no-store",
         headers: {
-          ...getAuthHeader(),
-        },
+          },
         body: form,
       });
 
@@ -246,7 +229,6 @@ export default function AiAssistantPage() {
       method: "DELETE",
       cache: "no-store",
       headers: {
-        ...getAuthHeader(),
       },
     });
 
@@ -283,8 +265,7 @@ export default function AiAssistantPage() {
         cache: "no-store",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeader(),
-        },
+          },
         body: JSON.stringify({
           sessionId,
           message: currentInput,
@@ -403,16 +384,21 @@ export default function AiAssistantPage() {
                 <div key={message.id} className={`rounded-xl border p-3 text-sm ${message.role === "USER" ? "ml-8 border-primary/40 bg-primary/5" : "mr-8 border-border/60 bg-card"}`}>
                   <p className="whitespace-pre-wrap leading-relaxed">{message.role === "ASSISTANT" ? formatAssistantMessage(message.content) : message.content}</p>
                   {message.role === "ASSISTANT" && message.routeUsed ? (
-                    <p className="mt-2 text-[11px] text-muted-foreground">Nguồn: {message.routeUsed}</p>
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Nguồn xử lý: {message.routeUsed === "SERVICE" ? "Service nội bộ" : message.routeUsed === "RAG" ? "RAG tri thức" : "Text2SQL"}
+                    </p>
                   ) : null}
                   {message.role === "ASSISTANT" && message.citations.length > 0 ? (
-                    <ul className="mt-2 list-disc space-y-1 pl-4 text-[11px] text-muted-foreground">
-                      {message.citations.map((citation, index) => (
-                        <li key={`${message.id}-${index}`}>
-                          {citation.source}: {citation.snippet}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                      <p className="font-medium">Nguồn tham chiếu:</p>
+                      <ul className="list-disc space-y-1 pl-4">
+                        {message.citations.map((citation, index) => (
+                          <li key={`${message.id}-${index}`}>
+                            [{citation.source}] {citation.snippet}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   ) : null}
                 </div>
               ))

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "
 import {
   apiCreateRecurringTemplate,
   apiCreateTransaction,
+  apiGetDashboardKpis,
   apiListCashbook,
   apiListRecurringTemplates,
   apiListTransactionReferenceData,
@@ -160,6 +161,14 @@ export default function TransactionsPage() {
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplateItem[]>([]);
   const [accounts, setAccounts] = useState<CashbookAccountItem[]>([]);
   const [postings, setPostings] = useState<CashbookPostingItem[]>([]);
+  const [dashboardKpis, setDashboardKpis] = useState<{
+    totalBudget: number;
+    totalSpent: number;
+    remainingBalance: number;
+    totalIncome: number;
+    transactionCount: number;
+    pendingCount: number;
+  } | null>(null);
   const [referenceDepartments, setReferenceDepartments] = useState<TransactionReferenceDepartment[]>([]);
   const [referenceBudgets, setReferenceBudgets] = useState<TransactionReferenceBudget[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
@@ -277,10 +286,11 @@ export default function TransactionsPage() {
     setSectionWarnings([]);
 
     try {
-      const [txResult, recurringResult, cashbookResult, referenceDataResult] = await Promise.allSettled([
+      const [txResult, recurringResult, cashbookResult, dashboardKpiResult, referenceDataResult] = await Promise.allSettled([
         apiListTransactions(currentToken, { page: 1, limit: 20 }),
         canReadRecurring ? apiListRecurringTemplates(currentToken, { page: 1, limit: 20 }) : Promise.resolve({ templates: [] }),
         canReadCashbook ? apiListCashbook(currentToken, { page: 1, limit: 30 }) : Promise.resolve({ accounts: [], postings: [] }),
+        apiGetDashboardKpis(currentToken),
         apiListTransactionReferenceData(currentToken),
       ]);
 
@@ -299,6 +309,13 @@ export default function TransactionsPage() {
       } else {
         setRecurringTemplates([]);
         warnings.push("Không tải được dữ liệu giao dịch định kỳ.");
+      }
+
+      if (dashboardKpiResult.status === "fulfilled") {
+        setDashboardKpis(dashboardKpiResult.value);
+      } else {
+        setDashboardKpis(null);
+        warnings.push("Không tải được KPI dashboard để đối soát.");
       }
 
       if (!canReadCashbook) {
@@ -601,7 +618,7 @@ export default function TransactionsPage() {
     setSuccess(null);
 
     try {
-      const result = await apiRunRecurringTemplates(token);
+      const result = await apiRunRecurringTemplates(token, makeIdempotencyKey("recurring-run"));
       setSuccess(`Đã quét ${result.scanned} mẫu, tạo ${result.created} phiếu giao dịch.`);
       await reloadData(token);
     } catch (unknownError) {
@@ -697,31 +714,31 @@ export default function TransactionsPage() {
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-2">
             <CardDescription>Tổng giao dịch</CardDescription>
-            <CardTitle className="text-2xl">{summary.total}</CardTitle>
+            <CardTitle className="text-2xl">{dashboardKpis?.transactionCount ?? summary.total}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">{summary.pending} phiếu đang chờ duyệt</p>
+            <p className="text-xs text-muted-foreground">{dashboardKpis ? dashboardKpis.pendingCount : summary.pending} phiếu đang chờ duyệt</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-2">
             <CardDescription>Dòng tiền thu/chi</CardDescription>
-            <CardTitle className="text-2xl">{formatMoney(summary.net.toFixed(2))}</CardTitle>
+            <CardTitle className="text-2xl">{formatMoney(((dashboardKpis?.totalIncome ?? summary.income) - (dashboardKpis?.totalSpent ?? summary.expense)).toFixed(2))}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-muted-foreground">
-            <p>Thu: {formatMoney(summary.income.toFixed(2))}</p>
-            <p>Chi: {formatMoney(summary.expense.toFixed(2))}</p>
+            <p>Thu: {formatMoney((dashboardKpis?.totalIncome ?? summary.income).toFixed(2))}</p>
+            <p>Chi: {formatMoney((dashboardKpis?.totalSpent ?? summary.expense).toFixed(2))}</p>
           </CardContent>
         </Card>
 
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-2">
-            <CardDescription>Đã thực thi</CardDescription>
+            <CardDescription>Đã thực thi (trang hiện tại)</CardDescription>
             <CardTitle className="text-2xl">{summary.executed}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">Sẵn sàng đối chiếu với ledger/cashbook</p>
+            <p className="text-xs text-muted-foreground">Số phiếu EXECUTED trong danh sách đang hiển thị</p>
           </CardContent>
         </Card>
 

@@ -10,7 +10,11 @@ export default function AuthPage() {
   const { token, currentUser, initializing, onAuthenticated, logout } = useAuthSession();
 
   if (initializing) {
-    return null;
+    return (
+      <main className="min-h-svh bg-gradient-to-b from-background via-background to-secondary/30 px-4 py-10 sm:py-14 lg:py-16">
+        <div className="mx-auto w-full max-w-6xl text-sm text-muted-foreground">Đang khởi tạo phiên làm việc...</div>
+      </main>
+    );
   }
 
   return (

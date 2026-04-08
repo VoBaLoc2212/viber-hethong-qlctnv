@@ -185,3 +185,13 @@ export type CashbookPostingItem = {
     date: string;
   };
 };
+
+export type DashboardKpisItem = {
+  totalBudget: number;
+  totalSpent: number;
+  remainingBalance: number;
+  totalIncome: number;
+  transactionCount: number;
+  pendingCount: number;
+  currency?: "VND" | "USD";
+};

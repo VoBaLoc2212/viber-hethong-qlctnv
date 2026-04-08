@@ -19,8 +19,10 @@ function buildRequestBody(body: unknown) {
 }
 
 function buildRequestHeaders(options: RequestOptions) {
+  const shouldSendBearer = Boolean(options.token && options.token !== "cookie-session");
+
   const base: Record<string, string> = {
-    ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+    ...(shouldSendBearer ? { Authorization: `Bearer ${options.token}` } : {}),
     ...(options.headers ?? {}),
   };
 
@@ -40,6 +42,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     headers: buildRequestHeaders(options),
     body: buildRequestBody(options.body),
     cache: "no-store",
+    credentials: "include",
   });
 
   if (!response.ok) {

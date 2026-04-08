@@ -13,14 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { apiLogout, apiMe } from "@/lib/api";
 import type { AuthUser } from "@/lib/api";
-import {
-  AUTH_TOKEN_COOKIE_KEY,
-  AUTH_TOKEN_STORAGE_KEY,
-  getFirstAccessiblePath,
-  getLandingPath,
-  isRouteAllowed,
-  normalizeNextPath,
-} from "@/lib/auth/rbac";
+import { AUTH_TOKEN_STORAGE_KEY, getFirstAccessiblePath, getLandingPath, isRouteAllowed, normalizeNextPath } from "@/lib/auth/rbac";
 import type { UserRole } from "@/modules/shared/contracts/domain";
 
 type AuthSessionContextValue = {
@@ -31,15 +24,8 @@ type AuthSessionContextValue = {
   logout: () => Promise<void>;
 };
 
+
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
-
-function setAuthCookie(token: string) {
-  document.cookie = `${AUTH_TOKEN_COOKIE_KEY}=${token}; path=/; max-age=${60 * 60 * 24 * 7}; samesite=lax`;
-}
-
-function clearAuthCookie() {
-  document.cookie = `${AUTH_TOKEN_COOKIE_KEY}=; path=/; max-age=0; samesite=lax`;
-}
 
 function resolvePostLoginPath(nextPath: string | null, role: UserRole): string {
   const normalized = normalizeNextPath(nextPath ?? "");
@@ -72,25 +58,20 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-    if (!stored) {
-      setToken(null);
-      setCurrentUser(null);
-      clearAuthCookie();
-      setInitializing(false);
-      return;
-    }
+    const fallbackToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
-    setToken(stored);
-    setAuthCookie(stored);
-
-    apiMe(stored)
+    apiMe()
       .then((user) => {
         setCurrentUser(user);
+        setToken("cookie-session");
+        if (fallbackToken) {
+          window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+        }
       })
       .catch(() => {
-        window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-        clearAuthCookie();
+        if (fallbackToken) {
+          window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+        }
         setToken(null);
         setCurrentUser(null);
       })
@@ -120,10 +101,9 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, [currentUser, initializing, navigateAfterAuth, pathname, router]);
 
   const onAuthenticated = useCallback(
-    async ({ token: nextToken, user }: { token: string; user: AuthUser }) => {
-      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, nextToken);
-      setAuthCookie(nextToken);
-      setToken(nextToken);
+    async ({ user }: { token: string; user: AuthUser }) => {
+      window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+      setToken("cookie-session");
       setCurrentUser(user);
 
       const target = resolvePostLoginPath(getNextPathFromUrl(), user.role);
@@ -140,7 +120,6 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     }
 
     window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-    clearAuthCookie();
     setToken(null);
     setCurrentUser(null);
     router.replace("/auth");

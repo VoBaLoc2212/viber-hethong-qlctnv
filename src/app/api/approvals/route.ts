@@ -1,15 +1,12 @@
 import type { NextRequest } from "next/server";
 
-import { listApprovals, syncExpenseToApprovals } from "@/modules/approval";
+import { listApprovals } from "@/modules/approval";
 import { handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
-    requireRole(auth, ["MANAGER", "ACCOUNTANT"]);
-
-    // Auto-sync EXPENSE transactions that don't have approval rows yet
-    await syncExpenseToApprovals();
+    requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
 
     const { searchParams } = new URL(request.url);
     const result = await listApprovals(auth, {

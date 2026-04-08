@@ -21,10 +21,29 @@ import { formatVnd, getTransactionStatusBadgeClass, getTransactionStatusLabel, g
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DashboardPage() {
-  const { data: kpis, isLoading: isLoadingKpis } = useGetDashboardKpis();
-  const { data: monthlyData, isLoading: isLoadingChart } = useGetExpensesByMonth();
-  const { data: departments } = useGetDepartments();
-  const { data: recentTransactions, isLoading: isLoadingTxs } = useGetTransactions({ limit: 5, page: 1 });
+  const { data: kpis, isLoading: isLoadingKpis } = useGetDashboardKpis({
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+  });
+  const { data: monthlyData, isLoading: isLoadingChart } = useGetExpensesByMonth({
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+  });
+  const { data: departments } = useGetDepartments({
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
+  });
+  const { data: recentTransactions, isLoading: isLoadingTxs } = useGetTransactions(
+    { limit: 5, page: 1 },
+    {
+      staleTime: 0,
+      refetchOnWindowFocus: true,
+      refetchInterval: 30_000,
+    },
+  );
 
   const formatCurrency = (val: number) => formatVnd(val);
 

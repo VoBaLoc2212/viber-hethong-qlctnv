@@ -10,41 +10,36 @@ concurrency:
   group: deploy-production
   cancel-in-progress: true
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-
     steps:
-      - name: Deploy to production via SSH
-        env:
-          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
-          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          echo "$DEPLOY_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-
-          ssh -p "${DEPLOY_PORT:-22}" -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" << EOF
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script_stop: true
+          command_timeout: 30m
+          script: |
             set -euo pipefail
-            cd /app/budget-management
+            cd "${{ secrets.DEPLOY_PATH }}"
 
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            git pull origin main
+            npm ci
 
-            docker compose -f docker-compose.yml up -d web
-            docker compose -f docker-compose.yml ps
-          EOF
+            docker compose up -d postgres
+            npm run prisma:migrate:deploy
+            npm run prisma:seed
+            npm run build
+
+            if pm2 describe next-app > /dev/null 2>&1; then
+              pm2 restart next-app --update-env
+            else
+              pm2 start npm --name "next-app" -- start
+            fi
+            pm2 save

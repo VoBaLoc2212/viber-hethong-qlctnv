@@ -404,7 +404,7 @@ Theo `docs/validation/finance-e2e-execution-report.md` (execution date `2026-03-
 
 - Typecheck/Test/Build: PASS
 - Runtime matrix major flows: PASS
-- FX: PARTIAL (cần mở rộng scenario runtime chuyên sâu nếu cần)
+- FX: PARTIAL 
 
 ---
 

@@ -2,6 +2,8 @@ import { apiRequest } from "./client";
 import type {
   AuditLogItem,
   AuthUser,
+  BudgetDeleteResult,
+  BudgetHistoryItem,
   BudgetItem,
   BudgetStatus,
   BudgetTransferResult,
@@ -84,10 +86,15 @@ export async function apiDeleteUser(token: string, id: string) {
   });
 }
 
-export async function apiListBudgets(token: string, params?: { departmentId?: string; period?: string }) {
+export async function apiListBudgets(
+  token: string,
+  params?: { departmentId?: string; period?: string; page?: number; limit?: number },
+) {
   const query = new URLSearchParams();
   if (params?.departmentId) query.set("departmentId", params.departmentId);
   if (params?.period) query.set("period", params.period);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.limit) query.set("limit", String(params.limit));
 
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return apiRequest<{ budgets: BudgetItem[] }>(`/api/budgets${suffix}`, { token });
@@ -133,6 +140,17 @@ export async function apiTransferBudget(
     token,
     headers: { "idempotency-key": idempotencyKey },
     body: payload,
+  });
+}
+
+export async function apiGetBudgetHistory(token: string, id: string) {
+  return apiRequest<{ history: BudgetHistoryItem[] }>(`/api/budgets/${id}/history`, { token });
+}
+
+export async function apiDeleteBudget(token: string, id: string) {
+  return apiRequest<BudgetDeleteResult>(`/api/budgets/${id}`, {
+    method: "DELETE",
+    token,
   });
 }
 

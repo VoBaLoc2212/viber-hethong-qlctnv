@@ -60,6 +60,15 @@ type ReportsResponse = {
   expenseComposition: Array<{ label: string; value: number }>;
   budgetVsActual: Array<{ label: string; budget: number; actual: number }>;
   cashflowForecastNextMonth: Array<{ period: string; projectedOutflow: number; projectedInflow: number }>;
+  appliedFilters: {
+    statusExcludedForFinancialAmounts: string[];
+    transactionCountIncludesAllStatuses: boolean;
+    ruleDescription: string;
+    fromDate: string | null;
+    toDate: string | null;
+    departmentId: string | null;
+    departmentFilterMode: "GUID_IGNORED" | "DEPARTMENT_APPLIED" | "NONE";
+  };
 };
 
 const formatMoney = (value: number) => formatVnd(value);
@@ -123,6 +132,14 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
             <Badge variant="outline">{getRoleLabel(currentUser?.role)}</Badge>
           </div>
 
+          {data?.appliedFilters ? (
+            <Alert>
+              <AlertDescription>
+                Scope báo cáo: Tổng số giao dịch tính theo tất cả trạng thái; tổng Thu/Chi loại trừ {data.appliedFilters.statusExcludedForFinancialAmounts.join("/")}. {data.appliedFilters.ruleDescription}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           {!token ? (
             <Alert>
               <AlertDescription>Vui lòng đăng nhập để sử dụng mô-đun báo cáo.</AlertDescription>
@@ -139,7 +156,7 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
               <Input id="report-to-date" type="datetime-local" value={toDate} onChange={(e) => setToDate(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="report-department-id">ID phòng ban</Label>
+              <Label htmlFor="report-department-id">Phòng ban (ID hoặc mã)</Label>
               <Input
                 id="report-department-id"
                 value={departmentId}

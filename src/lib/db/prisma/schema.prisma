@@ -248,9 +248,11 @@ model AuditLog {
   payloadHash   String?
   prevHash      String?
   entryHash     String?
-  sourceType    String   @default("USER")
-  sourceId      String?
-  createdAt     DateTime @default(now())
+  sourceType         String   @default("USER")
+  sourceId           String?
+  processingStatus   String?
+  processingUpdatedAt DateTime?
+  createdAt          DateTime @default(now())
 
   actor User @relation(fields: [actorId], references: [id])
 

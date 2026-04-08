@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /f/viber-hethong-qlctnv show 161caea -- src/lib/auth/rbac.ts)"
+    ]
+  }
+}

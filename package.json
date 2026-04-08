@@ -24,6 +24,7 @@
     "validation:ai:question-matrix:strict": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validation/verify-ai-role-question-matrix.ps1 -Strict",
     "validation:ai:context-history-cache": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validation/verify-ai-context-history-cache.ps1",
     "validation:ai:context-history-cache:smoke": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/validation/verify-ai-context-history-cache.ps1 -Smoke",
+    "validation:data:cross-module-consistency": "tsx scripts/validation/verify-cross-module-consistency.ts",
     "postinstall": "npm run prisma:generate"
   },
   "private": true,

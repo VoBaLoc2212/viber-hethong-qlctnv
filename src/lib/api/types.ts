@@ -66,6 +66,24 @@ export type BudgetTransferResult = {
   replayed: boolean;
 };
 
+export type BudgetHistoryItem = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  result: string;
+  actorId: string;
+  correlationId?: string | null;
+  direction?: "IN" | "OUT" | null;
+  payload?: unknown;
+  createdAt: string;
+};
+
+export type BudgetDeleteResult = {
+  id: string;
+  deleted: boolean;
+};
+
 export type AuditLogItem = {
   id: string;
   action: string;

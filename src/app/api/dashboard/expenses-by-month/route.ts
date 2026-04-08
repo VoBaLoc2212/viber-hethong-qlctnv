@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
+import { EXCLUDED_FROM_GLOBAL_METRICS, globalMetricsScopeDescription } from "@/modules/shared/finance/metrics-scope";
 import { handleApiError, requireAuth, requireRole } from "@/modules/shared";
 import { ok } from "@/modules/shared/http/response";
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
 
     const txWhere: Prisma.TransactionWhereInput = {
       status: {
-        notIn: ["REJECTED", "REVERSED"],
+        notIn: [...EXCLUDED_FROM_GLOBAL_METRICS],
       },
       ...(auth.role === "EMPLOYEE" ? { createdById: auth.userId } : {}),
     };
@@ -56,7 +57,20 @@ export async function GET(request: NextRequest) {
       .sort(([a], [b]) => (a < b ? -1 : 1))
       .map(([, v]) => v);
 
-    return ok({ rows: sorted.slice(-6), currency: "VND" as const }, { currency: "VND" });
+    return ok(
+      {
+        rows: sorted.slice(-6),
+        currency: "VND" as const,
+        appliedFilters: {
+          role: auth.role,
+          createdById: auth.role === "EMPLOYEE" ? auth.userId : null,
+          statusExcluded: [...EXCLUDED_FROM_GLOBAL_METRICS],
+          scope: "GLOBAL_KPI",
+          ruleDescription: globalMetricsScopeDescription(),
+        },
+      },
+      { currency: "VND", scope: "GLOBAL_KPI" },
+    );
   } catch (error) {
     return handleApiError(request, error);
   }

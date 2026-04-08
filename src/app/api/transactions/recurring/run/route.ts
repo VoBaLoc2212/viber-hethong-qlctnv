@@ -35,6 +35,8 @@ function hashIdempotencyKey(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+const LOCK_STALE_MS = 5 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
   const correlationId = getCorrelationId(request);
 
@@ -74,32 +76,65 @@ export async function POST(request: NextRequest) {
           failures: payload.failures ?? [],
           replayed: true,
         },
-        {},
+        { scope: "RECURRING_RUN", replayed: true },
       );
     }
 
-    const lockAcquired = await prisma.auditLog.create({
-      data: {
-        actorId: auth.userId,
+    const now = new Date();
+    const lock = await prisma.auditLog.findFirst({
+      where: {
         action: "RECURRING_RUN_LOCK",
         entityType: "RECURRING_BATCH",
         entityId: lockKey,
-        correlationId,
-        payload: {
-          idempotencyKey,
-          state: "PROCESSING",
-        },
       },
-    }).catch(() => null);
+    });
 
-    if (!lockAcquired) {
-      return new Response(JSON.stringify({ error: "Recurring run with this idempotency key is already in progress" }), {
-        status: 409,
-        headers: { "Content-Type": "application/json" },
+    if (!lock) {
+      await prisma.auditLog.create({
+        data: {
+          actorId: auth.userId,
+          action: "RECURRING_RUN_LOCK",
+          entityType: "RECURRING_BATCH",
+          entityId: lockKey,
+          correlationId,
+          processingStatus: "PROCESSING",
+          processingUpdatedAt: now,
+          payload: {
+            idempotencyKey,
+            state: "PROCESSING",
+          },
+        },
+      });
+    } else {
+      const status = lock.processingStatus ?? "PROCESSING";
+      const updatedAt = lock.processingUpdatedAt ?? lock.createdAt;
+      const stale = now.getTime() - updatedAt.getTime() > LOCK_STALE_MS;
+
+      if (status === "PROCESSING" && !stale) {
+        return new Response(
+          JSON.stringify({ error: "Recurring run with this idempotency key is already in progress" }),
+          {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      await prisma.auditLog.update({
+        where: { id: lock.id },
+        data: {
+          actorId: auth.userId,
+          correlationId,
+          processingStatus: "PROCESSING",
+          processingUpdatedAt: now,
+          payload: {
+            idempotencyKey,
+            state: stale ? "PROCESSING_RETRY_STALE_LOCK" : "PROCESSING_RETRY",
+          },
+        },
       });
     }
 
-    const now = new Date();
     const recurringRows = await prisma.recurringTransaction.findMany({
       where: {
         active: true,
@@ -150,22 +185,41 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await prisma.auditLog.create({
-      data: {
-        actorId: auth.userId,
-        action: "RECURRING_RUN",
-        entityType: "RECURRING_BATCH",
-        entityId: lockKey,
-        correlationId,
-        payload: {
-          idempotencyKey,
-          scanned: recurringRows.length,
-          created: createdTransactionIds.length,
-          createdTransactionIds,
-          failures,
+    const finalPayload = {
+      idempotencyKey,
+      scanned: recurringRows.length,
+      created: createdTransactionIds.length,
+      createdTransactionIds,
+      failures,
+    };
+
+    await prisma.$transaction([
+      prisma.auditLog.updateMany({
+        where: {
+          action: "RECURRING_RUN_LOCK",
+          entityType: "RECURRING_BATCH",
+          entityId: lockKey,
         },
-      },
-    });
+        data: {
+          processingStatus: "SUCCESS",
+          processingUpdatedAt: new Date(),
+          payload: {
+            ...finalPayload,
+            state: "SUCCESS",
+          },
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          actorId: auth.userId,
+          action: "RECURRING_RUN",
+          entityType: "RECURRING_BATCH",
+          entityId: lockKey,
+          correlationId,
+          payload: finalPayload,
+        },
+      }),
+    ]);
 
     return ok(
       {
@@ -175,9 +229,30 @@ export async function POST(request: NextRequest) {
         failures,
         replayed: false,
       },
-      {},
+      { scope: "RECURRING_RUN", replayed: false },
     );
   } catch (error) {
+    const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+    if (idempotencyKey) {
+      const lockKey = hashIdempotencyKey(`recurring-run:${idempotencyKey}`);
+      await prisma.auditLog.updateMany({
+        where: {
+          action: "RECURRING_RUN_LOCK",
+          entityType: "RECURRING_BATCH",
+          entityId: lockKey,
+          processingStatus: "PROCESSING",
+        },
+        data: {
+          processingStatus: "FAILED",
+          processingUpdatedAt: new Date(),
+          payload: {
+            idempotencyKey,
+            state: "FAILED",
+          },
+        },
+      }).catch(() => null);
+    }
+
     return handleApiError(request, error);
   }
 }

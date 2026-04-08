@@ -34,7 +34,20 @@ export async function GET(request: NextRequest) {
       budgetId: searchParams.get("budgetId") ?? undefined,
     });
 
-    return ok({ data: result.data, total: result.meta.total, page: result.meta.page, limit: result.meta.limit }, {});
+    return ok(
+      { data: result.data, total: result.meta.total, page: result.meta.page, limit: result.meta.limit },
+      {
+        appliedFilters: {
+          type: searchParams.get("type") ?? null,
+          status: searchParams.get("status") ?? null,
+          departmentId: searchParams.get("departmentId") ?? null,
+          budgetId: searchParams.get("budgetId") ?? null,
+          role: auth.role,
+          createdById: auth.role === "EMPLOYEE" ? auth.userId : null,
+          scope: "LIST_QUERY",
+        },
+      },
+    );
   } catch (error) {
     return handleApiError(request, error);
   }

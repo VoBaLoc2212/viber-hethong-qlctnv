@@ -7,6 +7,7 @@ const QUICK_LINKS = [
   { href: "/dashboard", label: "Tổng quan", description: "Theo dõi KPI và biến động tài chính gần đây." },
   { href: "/transactions", label: "Giao dịch", description: "Tra cứu, lọc và theo dõi giao dịch theo mã/mô tả." },
   { href: "/budgeting", label: "Điều phối ngân sách", description: "Tạo, cập nhật và chuyển ngân sách giữa các quỹ." },
+  { href: "/budgets", label: "Ngân sách", description: "Theo dõi ngân sách theo phòng ban và mức sử dụng." },
   { href: "/security", label: "Bảo mật & Nhật ký", description: "Theo dõi nhật ký kiểm toán và bút toán sổ cái." },
 ];
 

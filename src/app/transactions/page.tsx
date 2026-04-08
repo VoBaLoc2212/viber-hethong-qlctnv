@@ -170,6 +170,7 @@ export default function TransactionsPage() {
   const canReconcileCashbook = role ? CASHBOOK_RECONCILE_ROLES.includes(role) : false;
 
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
+  const [transactionsServerTotal, setTransactionsServerTotal] = useState<number>(0);
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplateItem[]>([]);
   const [accounts, setAccounts] = useState<CashbookAccountItem[]>([]);
   const [postings, setPostings] = useState<CashbookPostingItem[]>([]);
@@ -311,6 +312,7 @@ export default function TransactionsPage() {
       }
 
       setTransactions(txResult.value.data);
+      setTransactionsServerTotal(txResult.value.total);
 
       const warnings: string[] = [];
 
@@ -735,12 +737,13 @@ export default function TransactionsPage() {
 
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-2">
-            <CardDescription>Dòng tiền thu/chi</CardDescription>
+            <CardDescription>Dòng tiền thu/chi (toàn hệ thống theo KPI)</CardDescription>
             <CardTitle className="text-2xl">{formatMoney(((dashboardKpis?.totalIncome ?? summary.income) - (dashboardKpis?.totalSpent ?? summary.expense)).toFixed(2))}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-xs text-muted-foreground">
             <p>Thu: {formatMoney((dashboardKpis?.totalIncome ?? summary.income).toFixed(2))}</p>
             <p>Chi: {formatMoney((dashboardKpis?.totalSpent ?? summary.expense).toFixed(2))}</p>
+            <p>Rule: loại trừ giao dịch REJECTED/REVERSED.</p>
           </CardContent>
         </Card>
 
@@ -1051,7 +1054,9 @@ export default function TransactionsPage() {
                 </select>
               </div>
 
-              <div className="text-xs text-muted-foreground">Hiển thị {filteredTransactions.length}/{transactions.length} giao dịch.</div>
+              <div className="text-xs text-muted-foreground">
+                Hiển thị {filteredTransactions.length} / {transactions.length} / {transactionsServerTotal} giao dịch (filtered / loaded / total server).
+              </div>
 
               <Table>
                 <TableHeader>

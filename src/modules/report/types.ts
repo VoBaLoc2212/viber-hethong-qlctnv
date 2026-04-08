@@ -46,4 +46,13 @@ export type ReportsOverview = {
   expenseComposition: PieSeriesPoint[];
   budgetVsActual: BudgetVsActualPoint[];
   cashflowForecastNextMonth: ForecastPoint[];
+  appliedFilters: {
+    statusExcludedForFinancialAmounts: string[];
+    transactionCountIncludesAllStatuses: boolean;
+    ruleDescription: string;
+    fromDate: string | null;
+    toDate: string | null;
+    departmentId: string | null;
+    departmentFilterMode: "GUID_IGNORED" | "DEPARTMENT_APPLIED" | "NONE";
+  };
 };

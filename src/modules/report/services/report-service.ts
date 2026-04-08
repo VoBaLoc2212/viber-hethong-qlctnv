@@ -1,6 +1,7 @@
 import type { Prisma, RecurringFrequency, TransactionStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/db/prisma/client";
+import { EXCLUDED_FROM_GLOBAL_METRICS, globalMetricsScopeDescription } from "@/modules/shared/finance/metrics-scope";
 import { type AuthContext, requireRole } from "@/modules/shared";
 
 import type { ReportsOverview } from "../types";
@@ -80,12 +81,28 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
   const fromDate = parseDate(filter.fromDate);
   const toDate = parseDate(filter.toDate);
 
-  const departmentId = isGuid(filter.departmentId) ? undefined : filter.departmentId;
+  const rawDepartmentInput = filter.departmentId?.trim() || undefined;
+  const isDepartmentGuid = isGuid(rawDepartmentInput);
 
-  const txWhere: Prisma.TransactionWhereInput = {
-    status: {
-      notIn: ["REJECTED", "REVERSED"] as TransactionStatus[],
-    },
+  let departmentId: string | undefined;
+  if (isDepartmentGuid) {
+    departmentId = rawDepartmentInput;
+  } else if (rawDepartmentInput) {
+    const matchedDepartment = await prisma.department.findFirst({
+      where: {
+        code: {
+          equals: rawDepartmentInput,
+          mode: "insensitive",
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+    departmentId = matchedDepartment?.id;
+  }
+
+  const transactionCountWhere: Prisma.TransactionWhereInput = {
     departmentId,
     date:
       fromDate || toDate
@@ -96,6 +113,13 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
         : undefined,
   };
 
+  const financialAmountWhere: Prisma.TransactionWhereInput = {
+    ...transactionCountWhere,
+    status: {
+      notIn: [...EXCLUDED_FROM_GLOBAL_METRICS] as TransactionStatus[],
+    },
+  };
+
   const [departmentAgg, txAgg, pendingCount, transactionCount, transactions, splitAgg, unsplitExpenses, budgets, recurringRows] =
     await Promise.all([
       prisma.department.aggregate({
@@ -104,22 +128,22 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
       }),
       prisma.transaction.groupBy({
         by: ["type"],
-        where: txWhere,
+        where: financialAmountWhere,
         _sum: {
           amount: true,
         },
       }),
       prisma.transaction.count({
         where: {
-          ...txWhere,
+          ...transactionCountWhere,
           status: "PENDING",
         },
       }),
       prisma.transaction.count({
-        where: txWhere,
+        where: transactionCountWhere,
       }),
       prisma.transaction.findMany({
-        where: txWhere,
+        where: financialAmountWhere,
         select: {
           id: true,
           code: true,
@@ -136,7 +160,7 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
         by: ["categoryCode"],
         where: {
           transaction: {
-            ...txWhere,
+            ...financialAmountWhere,
             type: "EXPENSE",
           },
         },
@@ -146,7 +170,7 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
       }),
       prisma.transaction.findMany({
         where: {
-          ...txWhere,
+          ...financialAmountWhere,
           type: "EXPENSE",
           splits: {
             none: {},
@@ -308,5 +332,18 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
     expenseComposition,
     budgetVsActual,
     cashflowForecastNextMonth,
+    appliedFilters: {
+      statusExcludedForFinancialAmounts: [...EXCLUDED_FROM_GLOBAL_METRICS],
+      transactionCountIncludesAllStatuses: true,
+      ruleDescription: globalMetricsScopeDescription(),
+      fromDate: fromDate ? fromDate.toISOString() : null,
+      toDate: toDate ? toDate.toISOString() : null,
+      departmentId: departmentId ?? null,
+      departmentFilterMode: !rawDepartmentInput
+        ? "NONE"
+        : departmentId
+          ? "DEPARTMENT_APPLIED"
+          : "GUID_IGNORED",
+    },
   };
 }

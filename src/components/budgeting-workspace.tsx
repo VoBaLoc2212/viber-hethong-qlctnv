@@ -7,10 +7,11 @@ import {
   apiConfigureHardStop,
   apiCreateBudget,
   apiListBudgets,
+  apiListTransactionReferenceData,
   apiTransferBudget,
   apiUpdateBudget,
 } from "@/lib/api";
-import type { AuthUser, BudgetItem, BudgetStatus } from "@/lib/api";
+import type { AuthUser, BudgetItem, BudgetStatus, TransactionReferenceDepartment } from "@/lib/api";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +20,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatVnd } from "@/lib/ui-labels";
 
 const DEFAULT_WARNING = 80;
 
@@ -40,6 +43,10 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
   const [statusByBudget, setStatusByBudget] = useState<Record<string, BudgetStatus>>({});
   const [selectedBudgetId, setSelectedBudgetId] = useState<string>("");
+  const [departments, setDepartments] = useState<TransactionReferenceDepartment[]>([]);
+  const [budgetSearch, setBudgetSearch] = useState("");
+  const [transferSearch, setTransferSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"list" | "transfer">("list");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -83,8 +90,12 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
     setError(null);
 
     try {
-      const payload = await apiListBudgets(token);
+      const [payload, referenceData] = await Promise.all([
+        apiListBudgets(token),
+        apiListTransactionReferenceData(token),
+      ]);
       setBudgets(payload.budgets);
+      setDepartments(referenceData.departments);
 
       const statuses = await Promise.all(payload.budgets.map((budget) => apiBudgetStatus(token, budget.id)));
 
@@ -203,6 +214,44 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
       setError(message);
     }
   }
+
+  const budgetByDepartmentId = useMemo(() => {
+    return departments.reduce<Record<string, TransactionReferenceDepartment>>((accumulator, department) => {
+      accumulator[department.id] = department;
+      return accumulator;
+    }, {});
+  }, [departments]);
+
+  const filteredBudgets = useMemo(() => {
+    const keyword = budgetSearch.trim().toLowerCase();
+    if (!keyword) return budgets;
+
+    return budgets.filter((budget) => {
+      const department = budgetByDepartmentId[budget.departmentId];
+      return (
+        budget.id.toLowerCase().includes(keyword) ||
+        budget.period.toLowerCase().includes(keyword) ||
+        budget.departmentId.toLowerCase().includes(keyword) ||
+        department?.name.toLowerCase().includes(keyword) ||
+        department?.code.toLowerCase().includes(keyword)
+      );
+    });
+  }, [budgetSearch, budgets, budgetByDepartmentId]);
+
+  const transferOptions = useMemo(() => {
+    const keyword = transferSearch.trim().toLowerCase();
+    return budgets.filter((budget) => {
+      if (budget.id === selectedBudgetId) return false;
+      if (!keyword) return true;
+      const department = budgetByDepartmentId[budget.departmentId];
+      return (
+        budget.id.toLowerCase().includes(keyword) ||
+        budget.period.toLowerCase().includes(keyword) ||
+        department?.name.toLowerCase().includes(keyword) ||
+        department?.code.toLowerCase().includes(keyword)
+      );
+    });
+  }, [transferSearch, budgets, budgetByDepartmentId, selectedBudgetId]);
 
   const isHardStop = selectedStatus?.hardStopEnabled && selectedStatus.available === "0.00";
 
@@ -346,163 +395,209 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
         ) : null}
       </div>
 
-      <Card className="border-border/50 shadow-sm">
-        <CardHeader>
-          <CardTitle>Danh sách ngân sách</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Phòng ban</TableHead>
-                <TableHead>Kỳ</TableHead>
-                <TableHead>Số tiền</TableHead>
-                <TableHead>Đã giữ chỗ</TableHead>
-                <TableHead>Đã dùng</TableHead>
-                <TableHead>Còn khả dụng</TableHead>
-                <TableHead>Tỷ lệ dùng %</TableHead>
-                <TableHead>Cảnh báo</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {budgets.map((budget) => {
-                const status = statusByBudget[budget.id];
-                const isSelected = selectedBudgetId === budget.id;
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "list" | "transfer")}>
+        <TabsList>
+          <TabsTrigger value="list">Danh sách ngân sách</TabsTrigger>
+          <TabsTrigger value="transfer">Chuyển ngân sách</TabsTrigger>
+        </TabsList>
 
-                return (
-                  <TableRow
-                    key={budget.id}
-                    data-state={isSelected ? "selected" : undefined}
-                    className="cursor-pointer"
-                    onClick={() => {
-                      setSelectedBudgetId(budget.id);
-                      setUpdateForm({ amount: budget.amount, parentBudgetId: budget.parentBudgetId ?? "" });
-                    }}
-                  >
-                    <TableCell>{budget.id}</TableCell>
-                    <TableCell>{budget.departmentId}</TableCell>
-                    <TableCell>{budget.period}</TableCell>
-                    <TableCell>{budget.amount}</TableCell>
-                    <TableCell>{budget.reserved}</TableCell>
-                    <TableCell>{budget.used}</TableCell>
-                    <TableCell>{budget.available}</TableCell>
-                    <TableCell>{status ? `${status.percentageUsed}%` : "-"}</TableCell>
-                    <TableCell>
-                      {status?.warning ? (
-                        <Badge variant="outline" className="border-yellow-500/50 text-yellow-700 dark:text-yellow-300">
-                          Cảnh báo
-                        </Badge>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
+        <TabsContent value="list" className="mt-4">
+          <Card className="border-border/50 shadow-sm">
+            <CardHeader>
+              <CardTitle>Danh sách ngân sách</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                value={budgetSearch}
+                onChange={(event) => setBudgetSearch(event.target.value)}
+                placeholder="Tìm theo phòng ban / kỳ / mã ngân sách"
+              />
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-center">Mã ngân sách</TableHead>
+                    <TableHead className="text-center">Phòng ban</TableHead>
+                    <TableHead className="text-center">Kỳ</TableHead>
+                    <TableHead className="text-right">Số tiền</TableHead>
+                    <TableHead className="text-right">Đã giữ chỗ</TableHead>
+                    <TableHead className="text-right">Đã dùng</TableHead>
+                    <TableHead className="text-right">Còn khả dụng</TableHead>
+                    <TableHead className="text-center">Tỷ lệ dùng %</TableHead>
+                    <TableHead className="text-center">Cảnh báo</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {filteredBudgets.map((budget) => {
+                    const status = statusByBudget[budget.id];
+                    const isSelected = selectedBudgetId === budget.id;
+                    const department = budgetByDepartmentId[budget.departmentId];
 
-      {selectedBudgetId ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          {canMutateBudget ? (
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader>
-              <CardTitle>Cập nhật ngân sách: {selectedBudgetId}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={handleUpdateBudget}>
-                <div className="space-y-2">
-                  <Label htmlFor="update-amount">Số tiền mới</Label>
-                  <Input
-                    id="update-amount"
-                    value={updateForm.amount}
-                    onChange={(event) => setUpdateForm((prev) => ({ ...prev, amount: event.target.value }))}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="update-parent-budget-id">ID ngân sách cha</Label>
-                  <Input
-                    id="update-parent-budget-id"
-                    value={updateForm.parentBudgetId}
-                    onChange={(event) => setUpdateForm((prev) => ({ ...prev, parentBudgetId: event.target.value }))}
-                  />
-                </div>
-
-                <Button type="submit" disabled={!token}>
-                  Cập nhật
-                </Button>
-              </form>
+                    return (
+                      <TableRow
+                        key={budget.id}
+                        data-state={isSelected ? "selected" : undefined}
+                        className="cursor-pointer"
+                        onClick={() => {
+                          setSelectedBudgetId(budget.id);
+                          setUpdateForm({ amount: budget.amount, parentBudgetId: budget.parentBudgetId ?? "" });
+                        }}
+                      >
+                        <TableCell className="text-center font-mono text-xs">{budget.id.slice(0, 8)}</TableCell>
+                        <TableCell className="text-center">{department?.name ?? budget.departmentId}</TableCell>
+                        <TableCell className="text-center">{budget.period}</TableCell>
+                        <TableCell className="text-right">{formatVnd(budget.amount)}</TableCell>
+                        <TableCell className="text-right">{formatVnd(budget.reserved)}</TableCell>
+                        <TableCell className="text-right">{formatVnd(budget.used)}</TableCell>
+                        <TableCell className="text-right">{formatVnd(budget.available)}</TableCell>
+                        <TableCell className="text-center">{status ? `${status.percentageUsed}%` : "-"}</TableCell>
+                        <TableCell className="text-center">
+                          {status?.warning ? (
+                            <Badge variant="outline" className="border-yellow-500/50 text-yellow-700 dark:text-yellow-300">
+                              Cảnh báo
+                            </Badge>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </CardContent>
           </Card>
-          ) : null}
+        </TabsContent>
 
-          {canTransferBudget ? (
-          <Card className="border-border/50 shadow-sm">
-            <CardHeader>
-              <CardTitle>Chuyển ngân sách</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={handleTransferBudget}>
-                <div className="space-y-2">
-                  <Label htmlFor="transfer-to-budget-id">ID ngân sách nhận</Label>
-                  <Input
-                    id="transfer-to-budget-id"
-                    value={transferForm.toBudgetId}
-                    onChange={(event) => setTransferForm((prev) => ({ ...prev, toBudgetId: event.target.value }))}
-                    required
-                    disabled={!token || Boolean(isHardStop)}
-                  />
-                </div>
+        <TabsContent value="transfer" className="mt-4">
+          {selectedBudgetId ? (
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+              {canMutateBudget ? (
+                <Card className="border-border/50 shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Cập nhật ngân sách: {selectedBudgetId}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <form className="space-y-4" onSubmit={handleUpdateBudget}>
+                      <div className="space-y-2">
+                        <Label htmlFor="update-amount">Số tiền mới</Label>
+                        <Input
+                          id="update-amount"
+                          value={updateForm.amount}
+                          onChange={(event) => setUpdateForm((prev) => ({ ...prev, amount: event.target.value }))}
+                          required
+                        />
+                      </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="transfer-amount">Số tiền</Label>
-                  <Input
-                    id="transfer-amount"
-                    value={transferForm.amount}
-                    onChange={(event) => setTransferForm((prev) => ({ ...prev, amount: event.target.value }))}
-                    required
-                    disabled={!token || Boolean(isHardStop)}
-                  />
-                </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="update-parent-budget-id">ID ngân sách cha</Label>
+                        <Input
+                          id="update-parent-budget-id"
+                          value={updateForm.parentBudgetId}
+                          onChange={(event) => setUpdateForm((prev) => ({ ...prev, parentBudgetId: event.target.value }))}
+                        />
+                      </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="transfer-reason">Lý do</Label>
-                  <Input
-                    id="transfer-reason"
-                    value={transferForm.reason}
-                    onChange={(event) => setTransferForm((prev) => ({ ...prev, reason: event.target.value }))}
-                    disabled={!token || Boolean(isHardStop)}
-                  />
-                </div>
+                      <Button type="submit" disabled={!token}>
+                        Cập nhật
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              ) : null}
 
-                {selectedStatus?.warning ? (
-                  <Alert>
-                    <AlertDescription>
-                      Ngân sách đã sử dụng {selectedStatus.percentageUsed}% ({">="} {selectedStatus.warningThresholdPct}%).
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
+              {canTransferBudget ? (
+                <Card className="border-border/50 shadow-sm">
+                  <CardHeader>
+                    <CardTitle>Chuyển ngân sách</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <form className="space-y-4" onSubmit={handleTransferBudget}>
+                      <div className="space-y-2">
+                        <Label htmlFor="transfer-search">Tìm kiếm ngân sách nhận</Label>
+                        <Input
+                          id="transfer-search"
+                          value={transferSearch}
+                          onChange={(event) => setTransferSearch(event.target.value)}
+                          placeholder="Tìm theo phòng ban / kỳ / mã ngân sách"
+                          disabled={!token || Boolean(isHardStop)}
+                        />
+                      </div>
 
-                {isHardStop ? (
-                  <Alert variant="destructive">
-                    <AlertDescription>Đang chặn cứng: số dư khả dụng = 0.00, hệ thống khóa thao tác chi/chuyển ra.</AlertDescription>
-                  </Alert>
-                ) : null}
+                      <div className="space-y-2">
+                        <Label htmlFor="transfer-to-budget-id">ID ngân sách nhận</Label>
+                        <select
+                          id="transfer-to-budget-id"
+                          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                          value={transferForm.toBudgetId}
+                          onChange={(event) => setTransferForm((prev) => ({ ...prev, toBudgetId: event.target.value }))}
+                          required
+                          disabled={!token || Boolean(isHardStop)}
+                        >
+                          <option value="">Chọn ngân sách nhận</option>
+                          {transferOptions.map((budget) => {
+                            const department = budgetByDepartmentId[budget.departmentId];
+                            return (
+                              <option key={budget.id} value={budget.id}>
+                                {(department?.name ?? budget.departmentId)} • {budget.period} • {budget.id.slice(0, 8)}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
 
-                <Button type="submit" disabled={!token || Boolean(isHardStop)}>
-                  Chuyển ngân sách
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-          ) : null}
-        </div>
-      ) : null}
+                      <div className="space-y-2">
+                        <Label htmlFor="transfer-amount">Số tiền</Label>
+                        <Input
+                          id="transfer-amount"
+                          value={transferForm.amount}
+                          onChange={(event) => setTransferForm((prev) => ({ ...prev, amount: event.target.value }))}
+                          required
+                          disabled={!token || Boolean(isHardStop)}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="transfer-reason">Lý do</Label>
+                        <Input
+                          id="transfer-reason"
+                          value={transferForm.reason}
+                          onChange={(event) => setTransferForm((prev) => ({ ...prev, reason: event.target.value }))}
+                          disabled={!token || Boolean(isHardStop)}
+                        />
+                      </div>
+
+                      {selectedStatus?.warning ? (
+                        <Alert>
+                          <AlertDescription>
+                            Ngân sách đã sử dụng {selectedStatus.percentageUsed}% ({">="} {selectedStatus.warningThresholdPct}%).
+                          </AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      {isHardStop ? (
+                        <Alert variant="destructive">
+                          <AlertDescription>Đang chặn cứng: số dư khả dụng = 0.00, hệ thống khóa thao tác chi/chuyển ra.</AlertDescription>
+                        </Alert>
+                      ) : null}
+
+                      <Button type="submit" disabled={!token || Boolean(isHardStop)}>
+                        Chuyển ngân sách
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </div>
+          ) : (
+            <Card className="border-border/50 shadow-sm">
+              <CardContent className="pt-6 text-sm text-muted-foreground">
+                Vui lòng chọn một ngân sách ở tab "Danh sách ngân sách" trước khi chuyển.
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </section>
   );
 }

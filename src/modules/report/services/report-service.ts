@@ -17,6 +17,11 @@ function parseDate(value?: string) {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function isGuid(value?: string) {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim());
+}
+
 function toMonthKey(date: Date) {
   const y = date.getUTCFullYear();
   const m = date.getUTCMonth();
@@ -75,11 +80,13 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
   const fromDate = parseDate(filter.fromDate);
   const toDate = parseDate(filter.toDate);
 
+  const departmentId = isGuid(filter.departmentId) ? undefined : filter.departmentId;
+
   const txWhere: Prisma.TransactionWhereInput = {
     status: {
       notIn: ["REJECTED", "REVERSED"] as TransactionStatus[],
     },
-    departmentId: filter.departmentId,
+    departmentId,
     date:
       fromDate || toDate
         ? {
@@ -93,7 +100,7 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
     await Promise.all([
       prisma.department.aggregate({
         _sum: { budgetAllocated: true },
-        where: filter.departmentId ? { id: filter.departmentId } : undefined,
+        where: departmentId ? { id: departmentId } : undefined,
       }),
       prisma.transaction.groupBy({
         by: ["type"],
@@ -150,7 +157,7 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
         },
       }),
       prisma.budget.findMany({
-        where: filter.departmentId ? { departmentId: filter.departmentId } : undefined,
+        where: departmentId ? { departmentId: departmentId } : undefined,
         select: {
           period: true,
           amount: true,
@@ -160,7 +167,7 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
       prisma.recurringTransaction.findMany({
         where: {
           active: true,
-          ...(filter.departmentId ? { departmentId: filter.departmentId } : {}),
+          ...(departmentId ? { departmentId: departmentId } : {}),
         },
         select: {
           amount: true,

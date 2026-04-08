@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   useGetDashboardKpis,
+  useGetDepartments,
   useGetExpensesByMonth,
   useGetTransactions,
 } from "@/lib/api-client";
@@ -16,16 +17,16 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
+import { formatVnd, getTransactionStatusBadgeClass, getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function DashboardPage() {
   const { data: kpis, isLoading: isLoadingKpis } = useGetDashboardKpis();
   const { data: monthlyData, isLoading: isLoadingChart } = useGetExpensesByMonth();
+  const { data: departments } = useGetDepartments();
   const { data: recentTransactions, isLoading: isLoadingTxs } = useGetTransactions({ limit: 5, page: 1 });
 
-  const formatCurrency = (val: number) =>
-    new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND", maximumFractionDigits: 0 }).format(val);
+  const formatCurrency = (val: number) => formatVnd(val);
 
   return (
     <div className="space-y-8 pb-8">
@@ -41,7 +42,7 @@ export default function DashboardPage() {
         <KpiCard title="Tổng thu" value={kpis?.totalIncome} icon={<ArrowUpRight className="w-5 h-5 text-green-500" />} loading={isLoadingKpis} valueClass="text-green-600 dark:text-green-500" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <Card className="lg:col-span-2 shadow-sm border-border/50">
           <CardHeader>
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
@@ -113,16 +114,7 @@ export default function DashboardPage() {
                         {tx.type === "INCOME" ? "+" : "-"}
                         {formatCurrency(tx.amount)}
                       </p>
-                      <Badge
-                        variant="outline"
-                        className={`text-[10px] mt-1 ${
-                          tx.status === "APPROVED"
-                            ? "border-green-200 text-green-600 bg-green-50"
-                            : tx.status === "REJECTED"
-                              ? "border-red-200 text-red-600 bg-red-50"
-                              : "border-yellow-200 text-yellow-600 bg-yellow-50"
-                        }`}
-                      >
+                      <Badge variant="outline" className={`mt-1 text-[10px] ${getTransactionStatusBadgeClass(tx.status)}`}>
                         {getTransactionStatusLabel(tx.status)}
                       </Badge>
                     </div>
@@ -135,6 +127,38 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="shadow-sm border-border/50">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">Ngân sách phòng ban</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!departments || departments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Không có dữ liệu phòng ban.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-3">Phòng ban</th>
+                    <th className="py-2 pr-3">Mã</th>
+                    <th className="py-2 text-right">Ngân sách phân bổ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {departments.map((department) => (
+                    <tr key={department.id} className="border-b border-border/40">
+                      <td className="py-2 pr-3 font-medium">{department.name}</td>
+                      <td className="py-2 pr-3">{department.code}</td>
+                      <td className="py-2 text-right">{formatVnd(department.budgetAllocated)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -163,13 +187,7 @@ function KpiCard({
           {loading ? (
             <Skeleton className="h-8 w-24" />
           ) : (
-            <h3 className={`text-3xl font-bold tracking-tight ${valueClass}`}>
-              {new Intl.NumberFormat("vi-VN", {
-                style: "currency",
-                currency: "VND",
-                maximumFractionDigits: 0,
-              }).format(value || 0)}
-            </h3>
+            <h3 className={`text-3xl font-bold tracking-tight ${valueClass}`}>{formatVnd(value ?? 0)}</h3>
           )}
         </div>
       </CardContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { CheckCircle2, XCircle, Banknote, Ban, Loader2 } from "lucide-react";
 import {
@@ -35,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { formatVnd, getTransactionStatusBadgeClass, getTransactionStatusLabel } from "@/lib/ui-labels";
 
 // --- Status helpers ---
 
@@ -54,7 +55,7 @@ function StatusBadge({ status }: { status: ApprovalStatus }) {
 
 function formatCurrency(value: string | number) {
   const num = typeof value === "string" ? Number.parseFloat(value) : value;
-  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+  return formatVnd(num);
 }
 
 // --- Action buttons per row ---
@@ -112,6 +113,7 @@ export default function ApprovalsPage() {
     action: "approve" | "reject" | "execute" | "not-execute";
   } | null>(null);
   const [note, setNote] = useState("");
+  const [searchText, setSearchText] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -149,9 +151,15 @@ export default function ApprovalsPage() {
 
   function handleConfirmAction() {
     if (!actionDialog) return;
+
+    const payload =
+      actionDialog.action === "reject"
+        ? { action: actionDialog.action, reason: note || undefined }
+        : { action: actionDialog.action, note: note || undefined };
+
     actionMutation.mutate({
       id: actionDialog.item.id,
-      data: { action: actionDialog.action, note: note || undefined },
+      data: payload,
     });
   }
 
@@ -161,6 +169,20 @@ export default function ApprovalsPage() {
     execute: "Chi",
     "not-execute": "Không chi",
   };
+
+  const filteredApprovals = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    if (!keyword) return approvals ?? [];
+
+    return (approvals ?? []).filter((item) => {
+      return (
+        item.transactionCode.toLowerCase().includes(keyword) ||
+        (item.transactionDescription ?? "").toLowerCase().includes(keyword) ||
+        item.transactionAmount.toLowerCase().includes(keyword) ||
+        (item.approver?.fullName ?? "").toLowerCase().includes(keyword)
+      );
+    });
+  }, [approvals, searchText]);
 
   return (
     <div className="space-y-4">
@@ -182,13 +204,22 @@ export default function ApprovalsPage() {
         </TabsList>
 
         <TabsContent value={tab} className="mt-4">
+          <div className="mb-3">
+            <input
+              value={searchText}
+              onChange={(event) => setSearchText(event.target.value)}
+              placeholder="Tìm theo mã giao dịch / diễn giải / số tiền"
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </div>
+
           {isLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} className="h-16 w-full rounded-xl" />
               ))}
             </div>
-          ) : !approvals || approvals.length === 0 ? (
+          ) : filteredApprovals.length === 0 ? (
             <Card className="p-8 text-center text-muted-foreground">
               Không có phiếu nào.
             </Card>
@@ -198,17 +229,17 @@ export default function ApprovalsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Mã GD</TableHead>
-                    <TableHead>Mô tả</TableHead>
+                    <TableHead>Diễn giải</TableHead>
                     <TableHead className="text-right">Số tiền</TableHead>
-                    <TableHead>Trạng thái GD</TableHead>
-                    <TableHead>Trạng thái duyệt</TableHead>
+                    <TableHead>Trạng thái sếp duyệt</TableHead>
+                    <TableHead>Trạng thái kế toán chi</TableHead>
                     <TableHead>Người duyệt</TableHead>
                     <TableHead>Ngày tạo</TableHead>
                     <TableHead className="text-right">Hành động</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {approvals.map((item) => (
+                  {filteredApprovals.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-xs">{item.transactionCode}</TableCell>
                       <TableCell className="max-w-[200px] truncate">
@@ -218,10 +249,22 @@ export default function ApprovalsPage() {
                         {formatCurrency(item.transactionAmount)}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{item.transactionStatus}</Badge>
+                        <StatusBadge status={item.status} />
                       </TableCell>
                       <TableCell>
-                        <StatusBadge status={item.status} />
+                        {item.transactionStatus === "EXECUTED" ? (
+                          <Badge variant="outline" className={getTransactionStatusBadgeClass("EXECUTED")}>
+                            Đã chi (EXECUTED)
+                          </Badge>
+                        ) : item.transactionStatus === "REJECTED" ? (
+                          <Badge variant="outline" className={getTransactionStatusBadgeClass("REJECTED")}>
+                            Không chi (NOT_EXECUTED)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className={getTransactionStatusBadgeClass("PENDING")}>
+                            Chờ xử lý
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>{item.approver?.fullName ?? "—"}</TableCell>
                       <TableCell className="text-xs">
@@ -257,11 +300,13 @@ export default function ApprovalsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Ghi chú</label>
+            <label className="text-sm font-medium">
+              {actionDialog?.action === "reject" ? "Lý do không duyệt" : "Ghi chú"}
+            </label>
             <Textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Nhập ghi chú (không bắt buộc)..."
+              placeholder={actionDialog?.action === "reject" ? "Nhập lý do không duyệt..." : "Nhập ghi chú (không bắt buộc)..."}
               rows={3}
             />
           </div>

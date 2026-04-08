@@ -405,6 +405,7 @@ export function useApprovalAction(opts?: {
       data: {
         action: "approve" | "reject" | "execute" | "not-execute";
         note?: string;
+        reason?: string;
       };
     }
   >;

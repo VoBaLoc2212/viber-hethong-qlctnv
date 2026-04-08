@@ -403,12 +403,16 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
     const transactions = await tryService(() => listTransactions(auth, { page: 1, limit: 10 }));
     if (!transactions) return null;
 
+    const preview = transactions.data.slice(0, 5).map((tx, index) => {
+      return `${index + 1}) ${tx.transactionCode} | ${tx.type} | ${Number(tx.amount).toLocaleString("vi-VN")} đ | ${tx.status} | ${new Date(tx.date).toLocaleDateString("vi-VN")} | ${tx.description ?? "-"}`;
+    });
+
     return {
       intent,
       routeUsed: "SERVICE",
       rawAnswer:
         transactions.meta.total > 0
-          ? `Tìm thấy ${transactions.meta.total} giao dịch liên quan.`
+          ? `Tìm thấy ${transactions.meta.total} giao dịch liên quan.\n${preview.join("\n")}`
           : "Chưa tìm thấy giao dịch khớp từ khóa. Bạn có thể thêm phòng ban, tháng hoặc mã giao dịch để lọc tốt hơn.",
       citations: [{ source: "transaction-service", snippet: "listTransactions with keyword" }],
       relatedData: { transactions: transactions.data },

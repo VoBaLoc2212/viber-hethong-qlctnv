@@ -39,8 +39,9 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { formatVnd } from "@/lib/ui-labels";
 
-type TabKey = "mine" | "pending-approval" | "advance-paid" | "settlement-submitted" | "history";
+type TabKey = "mine" | "pending-approval" | "advance-paid" | "history";
 
 type ActionKind = "approve" | "reject" | "pay-advance" | "submit-settlement" | "review-settlement" | "complete";
 
@@ -58,10 +59,10 @@ function getDirectionLabel(item: ReimbursementItem) {
   if (!item.settlementDirection || !item.netAmount) return "-";
   const abs = item.netAmount.startsWith("-") ? item.netAmount.slice(1) : item.netAmount;
   if (item.settlementDirection === "RETURN_TO_COMPANY") {
-    return `Trả lại công ty ${Number(abs).toLocaleString("vi-VN")} VND`;
+    return `Trả lại công ty ${formatVnd(abs)}`;
   }
   if (item.settlementDirection === "PAY_TO_EMPLOYEE") {
-    return `Công ty trả thêm ${Number(abs).toLocaleString("vi-VN")} VND`;
+    return `Công ty trả thêm ${formatVnd(abs)}`;
   }
   return "Không phát sinh bù trừ";
 }
@@ -85,7 +86,6 @@ export default function ReimbursementPage() {
   const statusFilter = useMemo<ReimbursementStatus | undefined>(() => {
     if (tab === "pending-approval") return "PENDING_APPROVAL";
     if (tab === "advance-paid") return "ADVANCE_PAID";
-    if (tab === "settlement-submitted") return "SETTLEMENT_SUBMITTED";
     if (tab === "history") return undefined;
     return undefined;
   }, [tab]);
@@ -140,9 +140,14 @@ export default function ReimbursementPage() {
 
   function canAct(item: ReimbursementItem, action: ActionKind) {
     if (action === "approve") return isManager && item.status === "PENDING_APPROVAL";
-    if (action === "reject") return (isManager || isAccountant) && item.status !== "COMPLETED" && item.status !== "REJECTED";
+    if (action === "reject") {
+      if (item.status === "COMPLETED" || item.status === "REJECTED") return false;
+      if (isManager) return item.status === "PENDING_APPROVAL";
+      if (isAccountant) return ["ADVANCE_APPROVED", "ADVANCE_PAID", "SETTLEMENT_SUBMITTED", "SETTLEMENT_REVIEWED"].includes(item.status);
+      return false;
+    }
     if (action === "pay-advance") return isAccountant && item.status === "ADVANCE_APPROVED";
-    if (action === "submit-settlement") return isEmployee && item.status === "ADVANCE_PAID" && item.employeeId === currentUser?.id;
+    if (action === "submit-settlement") return item.status === "ADVANCE_PAID" && item.employeeId === currentUser?.id;
     if (action === "review-settlement") return isAccountant && item.status === "SETTLEMENT_SUBMITTED";
     if (action === "complete") return isAccountant && item.status === "SETTLEMENT_REVIEWED";
     return false;
@@ -201,7 +206,7 @@ export default function ReimbursementPage() {
           <h1 className="text-3xl font-bold tracking-tight">Hoàn ứng</h1>
           <p className="text-muted-foreground mt-1">Quy trình tạm ứng, quyết toán và bù trừ tự động.</p>
         </div>
-        {isEmployee ? (
+        {isEmployee || isManager || isAccountant ? (
           <Button onClick={() => setCreateOpen(true)}>Tạo đề nghị tạm ứng</Button>
         ) : null}
       </div>
@@ -209,9 +214,8 @@ export default function ReimbursementPage() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
         <TabsList>
           <TabsTrigger value="mine">Của tôi</TabsTrigger>
-          <TabsTrigger value="pending-approval">Chờ duyệt tạm ứng</TabsTrigger>
-          <TabsTrigger value="advance-paid">Chờ nộp quyết toán</TabsTrigger>
-          <TabsTrigger value="settlement-submitted">Chờ review quyết toán</TabsTrigger>
+          {isManager ? <TabsTrigger value="pending-approval">Chờ duyệt tạm ứng</TabsTrigger> : null}
+          {isAccountant ? <TabsTrigger value="advance-paid">Chi phiếu hoàn ứng</TabsTrigger> : null}
           <TabsTrigger value="history">Lịch sử</TabsTrigger>
         </TabsList>
 
@@ -241,8 +245,8 @@ export default function ReimbursementPage() {
                       <TableCell className="font-mono text-xs">{item.id.slice(0, 8)}</TableCell>
                       <TableCell>{item.employee?.fullName ?? item.employeeId}</TableCell>
                       <TableCell>{item.purpose}</TableCell>
-                      <TableCell className="text-right">{Number(item.advanceAmount).toLocaleString("vi-VN")}</TableCell>
-                      <TableCell className="text-right">{item.actualAmount ? Number(item.actualAmount).toLocaleString("vi-VN") : "-"}</TableCell>
+                      <TableCell className="text-right">{formatVnd(item.advanceAmount)}</TableCell>
+                      <TableCell className="text-right">{item.actualAmount ? formatVnd(item.actualAmount) : "-"}</TableCell>
                       <TableCell>{getDirectionLabel(item)}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{STATUS_LABEL[item.status]}</Badge>
@@ -300,6 +304,9 @@ export default function ReimbursementPage() {
               {actionDialog?.action === "review-settlement" && "Review quyết toán"}
               {actionDialog?.action === "complete" && "Hoàn tất hồ sơ"}
             </DialogTitle>
+            {actionDialog ? (
+              <DialogDescription>Số tiền tạm ứng: {formatVnd(actionDialog.item.advanceAmount)}</DialogDescription>
+            ) : null}
           </DialogHeader>
 
           <div className="space-y-3">

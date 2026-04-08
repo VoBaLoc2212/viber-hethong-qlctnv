@@ -294,7 +294,7 @@ export async function getReimbursementById(auth: AuthContext, id: string) {
 }
 
 export async function createReimbursementRequest(auth: AuthContext, payload: CreateReimbursementPayload, correlationId: string) {
-  requireRole(auth, ["EMPLOYEE"]);
+  requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT"]);
 
   const purpose = payload.purpose?.trim();
   if (!purpose) throw new AppError("purpose is required", "INVALID_INPUT");

@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Receipt,
@@ -13,7 +13,6 @@ import {
   WalletCards,
   Bot,
   Bell,
-  Search,
   Wallet,
   Sun,
   Moon,
@@ -23,6 +22,8 @@ import {
   HandCoins,
   CheckCheck,
   Trash2,
+  LogOut,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "framer-motion";
@@ -41,12 +42,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { NAV_ITEMS } from "@/lib/auth/rbac";
 import { useGetTransactions } from "@/lib/api-client";
-import { getRoleLabel, getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
+import { formatVnd, getRoleLabel, getTransactionStatusBadgeClass, getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const ICONS: Record<(typeof NAV_ITEMS)[number]["icon"], LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -64,13 +72,11 @@ const ICONS: Record<(typeof NAV_ITEMS)[number]["icon"], LucideIcon> = {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { resolvedTheme, setTheme } = useTheme();
   const { currentUser, logout, initializing } = useAuthSession();
   const [mounted, setMounted] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [searchKeyword, setSearchKeyword] = useState("");
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [hiddenNotificationIds, setHiddenNotificationIds] = useState<string[]>([]);
 
@@ -181,17 +187,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
     }
   }
 
-  function handleHeaderSearch(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const keyword = searchKeyword.trim();
-    const params = new URLSearchParams();
-    if (keyword) params.set("q", keyword);
-
-    const query = params.toString();
-    router.push(query ? `/transactions?${query}` : "/transactions");
-  }
-
   if (isAuthPage) {
     return <>{children}</>;
   }
@@ -254,17 +249,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="border-t border-border/50 p-4">
-          <div className="rounded-xl bg-secondary/50 p-4">
-            <h4 className="mb-1 text-sm font-semibold">Cần hỗ trợ?</h4>
-            <p className="mb-3 text-xs text-muted-foreground">Xem tài liệu hoặc liên hệ bộ phận hỗ trợ.</p>
-            <Button asChild variant="outline" className="w-full text-xs" size="sm">
-              <Link href="/HUONG_DAN_SU_DUNG_WEBSITE.pdf" target="_blank" rel="noopener noreferrer">
-                Tài liệu
-              </Link>
-            </Button>
-          </div>
-        </div>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
@@ -314,15 +298,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </nav>
               </SheetContent>
             </Sheet>
-            <form className="relative hidden w-full max-w-sm sm:block" onSubmit={handleHeaderSearch}>
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchKeyword}
-                onChange={(event) => setSearchKeyword(event.target.value)}
-                placeholder="Tìm kiếm giao dịch..."
-                className="h-9 rounded-full border-transparent bg-secondary/50 pl-9 transition-colors focus-visible:bg-background"
-              />
-            </form>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3">
@@ -381,8 +356,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
                             {!isRead ? <span className="h-2 w-2 shrink-0 rounded-full bg-destructive" /> : null}
                           </div>
                           <p className="text-muted-foreground">
-                            {getTransactionTypeLabel(tx.type)} · {getTransactionStatusLabel(tx.status)}
+                            {getTransactionTypeLabel(tx.type)} · {formatVnd(tx.amount)}
                           </p>
+                          <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] ${getTransactionStatusBadgeClass(tx.status)}`}>
+                            {getTransactionStatusLabel(tx.status)}
+                          </span>
                         </button>
                       );
                     })
@@ -418,23 +396,42 @@ export function AppLayout({ children }: { children: ReactNode }) {
               )}
             </Button>
             <div className="mx-0.5 hidden h-6 w-px bg-border sm:block" />
-            <button
-              type="button"
-              className="flex items-center gap-3 rounded-full p-1.5 pr-3 transition-colors hover:bg-secondary/50"
-              onClick={() => setLogoutDialogOpen(true)}
-              disabled={initializing || loggingOut}
-            >
-              <Avatar className="h-8 w-8 border border-border/50">
-                <AvatarImage src="" />
-                <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
-                  {currentUser?.fullName?.slice(0, 2).toUpperCase() ?? "--"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden text-left sm:block">
-                <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "Chưa có"}</p>
-                <p className="text-xs text-muted-foreground">{getRoleLabel(currentUser?.role) ?? "Chưa có"}</p>
-              </div>
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 rounded-full p-1.5 pr-2 transition-colors hover:bg-secondary/50"
+                  disabled={initializing || loggingOut}
+                >
+                  <Avatar className="h-8 w-8 border border-border/50">
+                    <AvatarImage src="" />
+                    <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
+                      {currentUser?.fullName?.slice(0, 2).toUpperCase() ?? "--"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="hidden text-left sm:block">
+                    <p className="text-sm font-medium leading-none">{currentUser?.fullName ?? "Chưa có"}</p>
+                    <p className="text-xs text-muted-foreground">{getRoleLabel(currentUser?.role) ?? "Chưa có"}</p>
+                  </div>
+                  <ChevronDown className="hidden h-4 w-4 text-muted-foreground sm:block" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel>
+                  <p className="text-sm">{currentUser?.fullName ?? "Chưa có"}</p>
+                  <p className="text-xs font-normal text-muted-foreground">{getRoleLabel(currentUser?.role) ?? "Chưa có"}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => setLogoutDialogOpen(true)}
+                  className="text-rose-600 focus:text-rose-700"
+                  disabled={initializing || loggingOut}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Đăng xuất
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 

@@ -12,6 +12,13 @@ import { getLedgerEntryTypeLabel, getRoleLabel } from "@/lib/ui-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type SecurityWorkspaceProps = {
@@ -32,6 +39,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const role = currentUser?.role;
   const canViewLogs = role === "FINANCE_ADMIN" || role === "AUDITOR";
@@ -118,6 +126,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
       });
 
       setLogs(payload.logs);
+      setFilterOpen(false);
     } catch (unknownError) {
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
@@ -140,6 +149,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
       });
 
       setLedgerEntries(payload.entries);
+      setFilterOpen(false);
     } catch (unknownError) {
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
@@ -197,6 +207,107 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
             <Button type="button" onClick={reloadAllData} disabled={!token || loading}>
               {loading ? "Đang tải..." : "Tải dữ liệu bảo mật"}
             </Button>
+            <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline">Bộ lọc</Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Bộ lọc nhật ký & sổ cái</DialogTitle>
+                </DialogHeader>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle>Nhật ký kiểm toán</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <form className="space-y-4" onSubmit={handleFilterLogs}>
+                        <div className="space-y-2">
+                          <Label htmlFor="log-entity-type">Loại đối tượng</Label>
+                          <Input
+                            id="log-entity-type"
+                            value={logFilter.entityType}
+                            onChange={(event) => setLogFilter((prev) => ({ ...prev, entityType: event.target.value }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="log-entity-id">ID đối tượng</Label>
+                          <Input
+                            id="log-entity-id"
+                            value={logFilter.entityId}
+                            onChange={(event) => setLogFilter((prev) => ({ ...prev, entityId: event.target.value }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="log-user-id">ID người dùng</Label>
+                          <Input
+                            id="log-user-id"
+                            value={logFilter.userId}
+                            onChange={(event) => setLogFilter((prev) => ({ ...prev, userId: event.target.value }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="log-from-date">Từ ngày (ISO)</Label>
+                          <Input
+                            id="log-from-date"
+                            value={logFilter.fromDate}
+                            onChange={(event) => setLogFilter((prev) => ({ ...prev, fromDate: event.target.value }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="log-to-date">Đến ngày (ISO)</Label>
+                          <Input
+                            id="log-to-date"
+                            value={logFilter.toDate}
+                            onChange={(event) => setLogFilter((prev) => ({ ...prev, toDate: event.target.value }))}
+                          />
+                        </div>
+
+                        <Button type="submit" disabled={!token || !canViewLogs}>
+                          Lọc nhật ký
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border/50 shadow-sm">
+                    <CardHeader>
+                      <CardTitle>Bộ lọc sổ cái</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <form className="space-y-4" onSubmit={handleFilterLedger}>
+                        <div className="space-y-2">
+                          <Label htmlFor="ledger-reference-type">Loại tham chiếu</Label>
+                          <Input
+                            id="ledger-reference-type"
+                            value={ledgerFilter.referenceType}
+                            onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceType: event.target.value }))}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="ledger-reference-id">ID tham chiếu</Label>
+                          <Input
+                            id="ledger-reference-id"
+                            value={ledgerFilter.referenceId}
+                            onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceId: event.target.value }))}
+                          />
+                        </div>
+
+                        <Button type="submit" disabled={!token || !canViewLedger}>
+                          Lọc sổ cái
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {error ? (
@@ -207,96 +318,6 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Nhật ký kiểm toán</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleFilterLogs}>
-              <div className="space-y-2">
-                <Label htmlFor="log-entity-type">Loại đối tượng</Label>
-                <Input
-                  id="log-entity-type"
-                  value={logFilter.entityType}
-                  onChange={(event) => setLogFilter((prev) => ({ ...prev, entityType: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="log-entity-id">ID đối tượng</Label>
-                <Input
-                  id="log-entity-id"
-                  value={logFilter.entityId}
-                  onChange={(event) => setLogFilter((prev) => ({ ...prev, entityId: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="log-user-id">ID người dùng</Label>
-                <Input
-                  id="log-user-id"
-                  value={logFilter.userId}
-                  onChange={(event) => setLogFilter((prev) => ({ ...prev, userId: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="log-from-date">Từ ngày (ISO)</Label>
-                <Input
-                  id="log-from-date"
-                  value={logFilter.fromDate}
-                  onChange={(event) => setLogFilter((prev) => ({ ...prev, fromDate: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="log-to-date">Đến ngày (ISO)</Label>
-                <Input
-                  id="log-to-date"
-                  value={logFilter.toDate}
-                  onChange={(event) => setLogFilter((prev) => ({ ...prev, toDate: event.target.value }))}
-                />
-              </div>
-
-              <Button type="submit" disabled={!token || !canViewLogs}>
-                Lọc nhật ký
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Bộ lọc sổ cái</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleFilterLedger}>
-              <div className="space-y-2">
-                <Label htmlFor="ledger-reference-type">Loại tham chiếu</Label>
-                <Input
-                  id="ledger-reference-type"
-                  value={ledgerFilter.referenceType}
-                  onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceType: event.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ledger-reference-id">ID tham chiếu</Label>
-                <Input
-                  id="ledger-reference-id"
-                  value={ledgerFilter.referenceId}
-                  onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceId: event.target.value }))}
-                />
-              </div>
-
-              <Button type="submit" disabled={!token || !canViewLedger}>
-                Lọc sổ cái
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
 
       {canViewLogs ? (
         <Card className="border-border/50 shadow-sm">

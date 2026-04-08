@@ -118,12 +118,6 @@ export const NAV_ITEMS: Array<{
     roles: ANALYST_ROLES,
   },
   {
-    href: "/budgets",
-    label: "Ngân sách",
-    icon: "budgets",
-    roles: ANALYST_ROLES,
-  },
-  {
     href: "/approvals",
     label: "Quy trình duyệt chi",
     icon: "approvals",

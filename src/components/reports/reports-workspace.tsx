@@ -6,7 +6,13 @@ import { apiRequest } from "@/lib/api/client";
 import type { AuthUser } from "@/lib/api";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { getRoleLabel, getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
+import {
+  formatVnd,
+  getRoleLabel,
+  getTransactionStatusBadgeClass,
+  getTransactionStatusLabel,
+  getTransactionTypeLabel,
+} from "@/lib/ui-labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -56,12 +62,7 @@ type ReportsResponse = {
   cashflowForecastNextMonth: Array<{ period: string; projectedOutflow: number; projectedInflow: number }>;
 };
 
-const formatMoney = (value: number) =>
-  new Intl.NumberFormat("vi-VN", {
-    style: "currency",
-    currency: "VND",
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatMoney = (value: number) => formatVnd(value);
 
 const PIE_COLORS = ["#16a34a", "#2563eb", "#d97706", "#9333ea", "#dc2626", "#0d9488", "#475569", "#0891b2"];
 
@@ -131,11 +132,11 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
           <form className="grid grid-cols-1 gap-4 md:grid-cols-4" onSubmit={loadReports}>
             <div className="space-y-2">
               <Label htmlFor="report-from-date">Từ ngày</Label>
-              <Input id="report-from-date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+              <Input id="report-from-date" type="datetime-local" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="report-to-date">Đến ngày</Label>
-              <Input id="report-to-date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+              <Input id="report-to-date" type="datetime-local" value={toDate} onChange={(e) => setToDate(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="report-department-id">ID phòng ban</Label>
@@ -298,16 +299,16 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tháng</TableHead>
-                    <TableHead>Thu</TableHead>
-                    <TableHead>Chi</TableHead>
+                    <TableHead className="text-right">Thu</TableHead>
+                    <TableHead className="text-right">Chi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.monthlySeries.map((row) => (
                     <TableRow key={row.month}>
-                      <TableCell>{row.month}</TableCell>
-                      <TableCell>{formatMoney(row.income)}</TableCell>
-                      <TableCell>{formatMoney(row.expenses)}</TableCell>
+                      <TableCell>{row.month.replace(/^thg\s*/i, "")}</TableCell>
+                      <TableCell className="text-right">{formatMoney(row.income)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(row.expenses)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -325,7 +326,7 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
                   <TableRow>
                     <TableHead>Mã</TableHead>
                     <TableHead>Loại</TableHead>
-                    <TableHead>Số tiền</TableHead>
+                    <TableHead className="text-right">Số tiền</TableHead>
                     <TableHead>Trạng thái</TableHead>
                     <TableHead>Ngày</TableHead>
                     <TableHead>Mô tả</TableHead>
@@ -336,8 +337,12 @@ export function ReportsWorkspace({ token, currentUser }: ReportsWorkspaceProps) 
                     <TableRow key={tx.id}>
                       <TableCell>{tx.code}</TableCell>
                       <TableCell>{getTransactionTypeLabel(tx.type)}</TableCell>
-                      <TableCell>{formatMoney(Number(tx.amount))}</TableCell>
-                      <TableCell>{getTransactionStatusLabel(tx.status)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(Number(tx.amount))}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={getTransactionStatusBadgeClass(tx.status)}>
+                          {getTransactionStatusLabel(tx.status)}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{new Date(tx.date).toLocaleString("vi-VN")}</TableCell>
                       <TableCell>{tx.description ?? "-"}</TableCell>
                     </TableRow>

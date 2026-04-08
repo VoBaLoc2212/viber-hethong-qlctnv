@@ -217,8 +217,6 @@ Trạng thái/logic chính nằm trong:
 
 ## 7) End-to-end use cases theo role (step-by-step)
 
-> Các kịch bản dưới đây bám theo `docs/validation/finance-e2e-test-plan.md` và execution report ngày `2026-03-30`.
-
 ## 7.1 Use case A — Employee tạo đề nghị chi
 
 **Input**
@@ -398,14 +396,6 @@ Xem chi tiết:
 - `docs/TESTING.md`
 - `docs/validation/finance-e2e-test-plan.md`
 
-## 9.3 Trạng thái thực thi gần nhất
-
-Theo `docs/validation/finance-e2e-execution-report.md` (execution date `2026-03-30`):
-
-- Typecheck/Test/Build: PASS
-- Runtime matrix major flows: PASS
-- FX: PARTIAL 
-
 ---
 
 ## 10) CI/CD workflow pipeline
@@ -428,7 +418,7 @@ Theo `docs/validation/finance-e2e-execution-report.md` (execution date `2026-03-
 
 ---
 
-## 13) Tài liệu tham chiếu
+## 11) Tài liệu tham chiếu
 
 - [docs/README.md](docs/README.md)
 - [docs/TESTING.md](docs/TESTING.md)

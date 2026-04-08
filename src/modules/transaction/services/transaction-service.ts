@@ -155,6 +155,10 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
     budgetId: filter.budgetId,
   };
 
+  if (auth.role === "EMPLOYEE") {
+    where.createdById = auth.userId;
+  }
+
   const [total, rows] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({

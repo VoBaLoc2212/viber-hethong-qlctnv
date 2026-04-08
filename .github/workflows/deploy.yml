@@ -29,7 +29,8 @@ jobs:
             set -euo pipefail
             cd "${{ secrets.DEPLOY_PATH }}"
 
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             npm ci
 
             docker compose up -d postgres

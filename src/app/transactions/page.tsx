@@ -135,6 +135,18 @@ function formatDepartmentOption(department: TransactionReferenceDepartment) {
   return `${department.code} - ${department.name}`;
 }
 
+function formatTransactionDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const base = date.toLocaleDateString("vi-VN");
+  const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0;
+  if (!hasTime) return base;
+
+  const time = date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return `${base} ${time}`;
+}
+
 function formatBudgetOption(budget: TransactionReferenceBudget) {
   return `${budget.period} | ${budget.departmentCode} | Còn ${formatMoney(budget.available)}`;
 }
@@ -275,7 +287,7 @@ export default function TransactionsPage() {
         TX_STATUS_LABEL[tx.status].toLowerCase().includes(keyword) ||
         TX_TYPE_LABEL[tx.type].toLowerCase().includes(keyword) ||
         formatMoney(tx.amount).toLowerCase().includes(keyword) ||
-        new Date(tx.date).toLocaleString("vi-VN").toLowerCase().includes(keyword);
+        formatTransactionDate(tx.date).toLowerCase().includes(keyword);
       return matchType && matchStatus && matchKeyword;
     });
   }, [transactions, txFilterType, txFilterStatus, txSearch]);
@@ -713,11 +725,11 @@ export default function TransactionsPage() {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="border-border/50 shadow-sm">
           <CardHeader className="pb-2">
-            <CardDescription>Tổng giao dịch</CardDescription>
-            <CardTitle className="text-2xl">{dashboardKpis?.transactionCount ?? summary.total}</CardTitle>
+            <CardDescription>Tổng giao dịch (danh sách hiện tại)</CardDescription>
+            <CardTitle className="text-2xl">{summary.total}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-muted-foreground">{dashboardKpis ? dashboardKpis.pendingCount : summary.pending} phiếu đang chờ duyệt</p>
+            <p className="text-xs text-muted-foreground">{summary.pending} phiếu đang chờ duyệt</p>
           </CardContent>
         </Card>
 
@@ -1063,7 +1075,7 @@ export default function TransactionsPage() {
                         <Badge variant="outline" className={statusBadgeClass(tx.status)}>{TX_STATUS_LABEL[tx.status]}</Badge>
                       </TableCell>
                       <TableCell>{formatMoney(tx.amount)}</TableCell>
-                      <TableCell>{new Date(tx.date).toLocaleString()}</TableCell>
+                      <TableCell>{formatTransactionDate(tx.date)}</TableCell>
                       <TableCell>{tx.description || "-"}</TableCell>
                     </TableRow>
                   ))}

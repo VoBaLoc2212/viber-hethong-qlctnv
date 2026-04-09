@@ -8,6 +8,17 @@ import { resolveByService } from "./service-adapter";
 import { resolveByText2Sql } from "./text2sql-service";
 import { isRouteAllowed, resolveAiPolicy } from "./ai-policy";
 
+const RBAC_DENIED_MESSAGE = "Mình chưa thể truy xuất dữ liệu trong phạm vi quyền hiện tại. Vui lòng thêm phạm vi (phòng ban/thời gian/trạng thái) hoặc dùng tài khoản có quyền phù hợp.";
+const RUNTIME_TEMPORARY_FAILURE_MESSAGE = "Mình chưa truy xuất được dữ liệu thời gian thực ở thời điểm này. Bạn hãy thử lại và thêm phạm vi (phòng ban/thời gian) để mình trả kết quả chính xác hơn.";
+
+function buildScopeDeniedMessage() {
+  return RBAC_DENIED_MESSAGE;
+}
+
+function buildRuntimeTemporaryFailureMessage() {
+  return RUNTIME_TEMPORARY_FAILURE_MESSAGE;
+}
+
 function finalizeResolution(resolution: AiResolution): AiResolution {
   return {
     ...resolution,
@@ -25,7 +36,7 @@ function normalizeSearchText(value: string) {
 
 function isGuidanceLikeMessage(message: string) {
   const normalized = normalizeSearchText(message);
-  return /quy trinh|huong dan|chinh sach|policy|help|tai lieu|document|docs|kb|kien thuc/.test(normalized);
+  return /quy trinh|huong dan|chinh sach|policy|help|tai lieu|document|docs|kb|kien thuc|theo mock|theo tai lieu|hard\s*stop|sla|chung tu|chung tu bat buoc|hoan ung|quyet toan|vai tro auditor|vai tro manager|vai tro accountant|vai tro finance_admin/.test(normalized);
 }
 
 function shouldPreferText2SqlFirst(message: string) {
@@ -76,8 +87,11 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
     resolution = {
       intent,
       routeUsed: "SERVICE",
-      rawAnswer: "Mình chưa thể truy xuất dữ liệu trong phạm vi quyền hiện tại. Vui lòng thêm phạm vi (phòng ban/thời gian/trạng thái) hoặc dùng tài khoản có quyền phù hợp.",
+      rawAnswer: buildScopeDeniedMessage(),
       citations: [{ source: "ai-policy", snippet: "controlled-retrieval-rbac" }],
+      relatedData: {
+        resolutionReason: "role_scope_denied",
+      },
       suggestedActions: ["Kiểm tra quyền truy cập theo vai trò", "Dùng tài khoản MANAGER, ACCOUNTANT hoặc FINANCE_ADMIN"],
     };
   } else {
@@ -85,6 +99,15 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
     resolution = canUseService ? await resolveByService(input.auth, intent, message) : null;
   }
   let text2SqlFailure: { message: string; code?: string } | null = null;
+
+  const classifyText2SqlFailure = (failure: { message: string; code?: string } | null) => {
+    if (!failure) return null;
+    const normalized = (failure.code ?? failure.message).toUpperCase();
+    if (normalized.includes("FORBIDDEN") || normalized.includes("UNAUTHORIZED")) {
+      return "forbidden" as const;
+    }
+    return "temporary" as const;
+  };
 
   if (resolution && !isRouteAllowed(resolution.routeUsed, policy.allowedRoutes)) {
     resolution = null;
@@ -147,7 +170,7 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
             : undefined,
         };
 
-        if (canUseRag && !rag) {
+        if (canUseRag && !rag && (!isServiceDataQuestion || intent === "GUIDANCE")) {
           rag = await resolveByRag(message, input.auth, { conversationMessages });
         }
         if (rag && canUseRag && (!isServiceDataQuestion || intent === "GUIDANCE")) {
@@ -156,13 +179,16 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
             routeUsed: "RAG",
             rawAnswer: rag.answer,
             citations: rag.citations,
+            relatedData: {
+              resolutionReason: "rag_after_text2sql_failure",
+            },
             suggestedActions: ["Mô tả rõ ngữ cảnh để mình hỗ trợ chính xác hơn"],
           });
         }
       }
     }
 
-    if (!resolution && canUseRag && !rag) {
+    if (!resolution && canUseRag && !rag && (!isServiceDataQuestion || intent === "GUIDANCE")) {
       rag = await resolveByRag(message, input.auth, { conversationMessages });
     }
 
@@ -172,6 +198,9 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
         routeUsed: "RAG",
         rawAnswer: rag.answer,
         citations: rag.citations,
+        relatedData: {
+          resolutionReason: "rag_fallback",
+        },
         suggestedActions: ["Mô tả rõ ngữ cảnh để mình hỗ trợ chính xác hơn"],
       });
     }
@@ -181,16 +210,24 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
         ? {
           text2sqlError: text2SqlFailure.message,
           text2sqlErrorCode: text2SqlFailure.code ?? null,
+          text2sqlFailureType: classifyText2SqlFailure(text2SqlFailure),
         }
         : {};
+      const text2SqlFailureType = classifyText2SqlFailure(text2SqlFailure);
+      const isRuntimeTemporaryFailure = Boolean(text2SqlFailureType === "temporary" && isServiceDataQuestion && intent !== "GUIDANCE");
 
       resolution = withPolicy({
         intent,
         routeUsed: "SERVICE",
-        rawAnswer: "Mình chưa thể truy xuất dữ liệu trong phạm vi quyền hiện tại. Vui lòng thêm phạm vi (phòng ban/thời gian/trạng thái) hoặc dùng tài khoản có quyền phù hợp.",
-        citations: [{ source: "ai-policy", snippet: "controlled-retrieval-rbac" }],
-        relatedData: text2SqlDiagnostic,
-        suggestedActions: ["Thêm bộ lọc phạm vi dữ liệu", "Kiểm tra quyền truy cập theo vai trò"],
+        rawAnswer: isRuntimeTemporaryFailure ? buildRuntimeTemporaryFailureMessage() : buildScopeDeniedMessage(),
+        citations: [{ source: "ai-policy", snippet: isRuntimeTemporaryFailure ? "runtime-retrieval-temporary-failure" : "controlled-retrieval-rbac" }],
+        relatedData: {
+          ...text2SqlDiagnostic,
+          resolutionReason: isRuntimeTemporaryFailure ? "runtime_temporary_failure" : "policy_scope_fallback",
+        },
+        suggestedActions: isRuntimeTemporaryFailure
+          ? ["Thử lại sau vài giây", "Thêm phòng ban hoặc khoảng thời gian để lọc chính xác hơn"]
+          : ["Thêm bộ lọc phạm vi dữ liệu", "Kiểm tra quyền truy cập theo vai trò"],
       });
     }
   }

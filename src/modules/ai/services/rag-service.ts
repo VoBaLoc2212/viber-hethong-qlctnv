@@ -77,12 +77,14 @@ function buildProcessAnswerFromChunks(
   question: string,
   knowledgeChunks: Array<{ source: string; snippet: string; content: string }>,
 ): string | null {
-  const isProcessQuestion = /quy trình|process|phê duyệt|approval/i.test(question);
+  const isProcessQuestion = /quy trình|process|phê duyệt|approval|hard\s*stop|sla|chứng từ|chung tu|hoàn ứng|hoan ung/i.test(question);
   if (!isProcessQuestion || knowledgeChunks.length === 0) return null;
 
   const preferredChunk =
     knowledgeChunks.find((item) => /mock_quy_trinh_phe_duyet_chi_phi\.txt/i.test(item.source)) ??
-    knowledgeChunks.find((item) => /quy_trinh|phe_duyet|approval|process/i.test(item.source)) ??
+    knowledgeChunks.find((item) => /mock_nghiep_vu_hoan_ung_cong_tac\.txt/i.test(item.source)) ??
+    knowledgeChunks.find((item) => /mock_tai_lieu_mat_noi_bo_gia_lap\.txt/i.test(item.source)) ??
+    knowledgeChunks.find((item) => /quy_trinh|phe_duyet|approval|process|hoan_ung|chung_tu/i.test(item.source)) ??
     knowledgeChunks.find((item) => /\b(bước|buoc)\s*\d+\s*:/im.test(item.content)) ??
     knowledgeChunks[0];
 
@@ -93,16 +95,61 @@ function buildProcessAnswerFromChunks(
 
   const stepLines = extractStepLines(preferredChunk.content);
 
+  const entityPattern = /\bmanager\b/i.test(question)
+    ? /\bmanager\b/i
+    : /\bauditor\b/i.test(question)
+      ? /\bauditor\b/i
+      : /\baccountant\b/i.test(question)
+        ? /\baccountant\b/i
+        : /finance[_\s-]*admin/i.test(question)
+          ? /finance[_\s-]*admin/i
+          : null;
+
+  if (entityPattern) {
+    const entityLines = lines.filter((line) => entityPattern.test(line)).slice(0, 3);
+    if (entityLines.length > 0) {
+      return entityLines.join(" ");
+    }
+  }
+
+  if (/hard\s*stop|100%/i.test(question)) {
+    const hardStopLines = lines.filter((line) => /hard\s*stop|100%|chặn tạo yêu cầu|chan tao yeu cau/i.test(line)).slice(0, 3);
+    if (hardStopLines.length > 0) {
+      return hardStopLines.join(" ");
+    }
+  }
+
+  if (/sla|dưới\s*10|duoi\s*10|từ\s*10|tu\s*10/i.test(question)) {
+    const slaLines = lines.filter((line) => /sla|10\.000\.000|4 giờ|1 ngày/i.test(line)).slice(0, 3);
+    if (slaLines.length > 0) {
+      return slaLines.join(" ");
+    }
+  }
+
+  if (/chứng từ|chung tu|bộ chứng từ|bo chung tu/i.test(question)) {
+    const evidenceLines = lines.filter((line) => /chứng từ|chung tu|hóa đơn|hoa don|vé tàu|ve tau|quyết định|quyet dinh/i.test(line)).slice(0, 5);
+    if (evidenceLines.length > 0) {
+      return evidenceLines.join(" ");
+    }
+  }
+
+  if (/hoàn ứng|hoan ung|07\s*ngày|07\s*ngay|7\s*ngày|7\s*ngay/i.test(question)) {
+    const settlementLines = lines.filter((line) => /07\s*ngày|07\s*ngay|7\s*ngày|7\s*ngay|hoàn ứng|hoan ung|quyết toán|quyet toan/i.test(line)).slice(0, 4);
+    if (settlementLines.length > 0) {
+      return settlementLines.join(" ");
+    }
+  }
+
   if (stepLines.length > 0) {
-    return `${stepLines.join(" ")} Bạn có thể vào trang Help để xem đầy đủ hướng dẫn và chính sách quyền truy cập.`;
+    return stepLines.join(" ");
   }
 
   const keyLines = lines
-    .filter((line) => /(manager|accountant|finance_admin|hard-stop|sla|phê duyệt|phe duyet)/i.test(line))
+    .filter((line) => /(manager|accountant|finance_admin|auditor|hard-stop|sla|phê duyệt|phe duyet)/i.test(line))
     .slice(0, 4);
 
   if (keyLines.length > 0) {
-    return `${keyLines.join(" ")} Bạn có thể vào trang Help để xem đầy đủ hướng dẫn và chính sách quyền truy cập.`;
+    return keyLines.join(" ");
   }
 
   return null;
@@ -130,7 +177,7 @@ function buildProcessAnswerFromStaticContext(question: string, staticContext: st
     .slice(0, 5);
 
   if (stepLines.length > 0) {
-    return `${stepLines.join(" ")} Bạn có thể vào trang Help để xem đầy đủ hướng dẫn và chính sách quyền truy cập.`;
+    return stepLines.join(" ");
   }
 
   return null;
@@ -144,7 +191,7 @@ function fallbackAnswer(
   const normalizedQuestion = question.trim().toLowerCase();
 
   if (/\bbạn là ai\b|who are you|ban la ai/.test(normalizedQuestion)) {
-    return "Mình là BudgetFlow AI Assistant, hỗ trợ tra cứu ngân sách, giao dịch, phê duyệt, báo cáo và hướng dẫn thao tác trong hệ thống. Bạn có thể vào trang Help để xem hướng dẫn chi tiết theo từng chức năng.";
+    return "Mình là BudgetFlow AI Assistant, hỗ trợ tra cứu ngân sách, giao dịch, phê duyệt, báo cáo và hướng dẫn thao tác trong hệ thống.";
   }
 
   const processAnswer = buildProcessAnswerFromChunks(question, knowledgeChunks);
@@ -152,11 +199,20 @@ function fallbackAnswer(
     return processAnswer;
   }
 
-  if (!context.trim()) {
-    return "Hiện chưa có nguồn tài liệu nội bộ đủ để trả lời trực tiếp câu hỏi này. Bạn có thể vào trang Help để xem hướng dẫn thao tác và chính sách quyền truy cập.";
+  const firstKnowledgeLine = knowledgeChunks
+    .flatMap((chunk) => chunk.content.split("\n"))
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+
+  if (firstKnowledgeLine) {
+    return `Theo tài liệu nội bộ mình tìm được: ${firstKnowledgeLine}`;
   }
 
-  return `Mình đã tra cứu tài liệu nội bộ cho câu hỏi \"${question}\". Bạn có thể vào trang Help để xem hướng dẫn chi tiết và chính sách quyền truy cập.`;
+  if (!context.trim()) {
+    return "Mình chưa có đủ nguồn nội bộ để trả lời trực tiếp câu hỏi này. Bạn vui lòng bổ sung phạm vi (phòng ban/thời gian/chức năng) để mình truy xuất chính xác hơn.";
+  }
+
+  return `Mình chưa thấy đủ dữ kiện trong tài liệu nội bộ để kết luận cho câu hỏi "${question}". Bạn hãy nêu rõ thêm phạm vi hoặc mục tiêu cần tra cứu.`;
 }
 
 export async function resolveByRag(

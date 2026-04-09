@@ -198,8 +198,35 @@ export async function resolveByText2Sql(
       : await queryIncomeExpenseTotals();
 
   const answer = rows.length === 0
-    ? "Không có dữ liệu phù hợp với truy vấn này."
-    : `Đã truy vấn ${rows.length} dòng dữ liệu phù hợp. Dưới đây là kết quả tổng hợp theo truy vấn của bạn.`;
+    ? "Không có dữ liệu phù hợp trong phạm vi truy vấn bạn vừa hỏi."
+    : route.kind === "fx_latest"
+      ? (() => {
+        const latest = rows[0] as {
+          rate?: number;
+          rateDate?: Date;
+          fromCurrency?: string;
+          toCurrency?: string;
+        };
+        const rate = Number(latest.rate ?? 0).toLocaleString("vi-VN");
+        const date = latest.rateDate ? new Date(latest.rateDate).toLocaleDateString("vi-VN") : "không rõ ngày";
+        return `Tỷ giá ${latest.fromCurrency ?? "USD"}/${latest.toCurrency ?? "VND"} mới nhất là ${rate} tại ngày ${date}.`;
+      })()
+      : route.kind === "fx_average"
+        ? (() => {
+          const summary = rows[0] as { avg_rate?: number | null; period?: string };
+          if (!summary.avg_rate) {
+            return "Chưa có dữ liệu tỷ giá để tính trung bình trong phạm vi bạn hỏi.";
+          }
+          const period = summary.period === "current_month" ? "tháng hiện tại" : "toàn bộ dữ liệu";
+          return `Tỷ giá USD/VND trung bình cho ${period} là ${Number(summary.avg_rate).toLocaleString("vi-VN")}.`;
+        })()
+        : (() => {
+          const summary = rows[0] as { total_income?: number; total_expense?: number };
+          const totalIncome = Number(summary.total_income ?? 0);
+          const totalExpense = Number(summary.total_expense ?? 0);
+          const delta = totalIncome - totalExpense;
+          return `Tổng thu là ${totalIncome.toLocaleString("vi-VN")} VND, tổng chi là ${totalExpense.toLocaleString("vi-VN")} VND, chênh lệch ${delta.toLocaleString("vi-VN")} VND.`;
+        })();
 
   const relatedData = {
     route: route.kind,

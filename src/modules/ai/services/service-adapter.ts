@@ -49,6 +49,18 @@ function monthRangeFromQuarter(year: number, quarter: number) {
   return { fromDate: fromDate.toISOString(), toDate: toDate.toISOString() };
 }
 
+function monthRange(year: number, month: number) {
+  const fromDate = new Date(Date.UTC(year, month - 1, 1));
+  const toDate = new Date(Date.UTC(year, month, 0, 23, 59, 59));
+  return { fromDate: fromDate.toISOString(), toDate: toDate.toISOString() };
+}
+
+function yearRange(year: number) {
+  const fromDate = new Date(Date.UTC(year, 0, 1));
+  const toDate = new Date(Date.UTC(year, 11, 31, 23, 59, 59));
+  return { fromDate: fromDate.toISOString(), toDate: toDate.toISOString() };
+}
+
 function normalizeSearchText(value: string) {
   return value
     .normalize("NFD")
@@ -67,6 +79,72 @@ function isQuantityQuestionForBudgets(normalizedText: string) {
   if (!isQuantity) return false;
   if (MONEY_AMOUNT_PATTERN.test(normalizedText)) return false;
   return /ngan?\s*sach|budget|phong\s*ban|department/.test(normalizedText);
+}
+
+async function detectDepartmentScope(message: string) {
+  const departments = await prisma.department.findMany({
+    select: { id: true, name: true, code: true },
+  });
+
+  const normalizedMessage = normalizeSearchText(message);
+  const messageTokens = tokenizeSearchText(message);
+
+  const selected = departments.find((department) => {
+    const normalizedName = normalizeSearchText(department.name);
+    const normalizedCode = normalizeSearchText(department.code);
+
+    if (normalizedMessage.includes(normalizedName)) return true;
+    if (normalizedMessage.includes(normalizedCode)) return true;
+
+    return messageTokens.some((token) => token.length >= 2 && (normalizedName.includes(token) || normalizedCode === token));
+  });
+
+  return selected ?? null;
+}
+
+function detectReportScope(message: string, normalizedText: string) {
+  const currentDate = new Date();
+  const detectedYear = Number((normalizedText.match(/20\d{2}/)?.[0] ?? currentDate.getUTCFullYear().toString()));
+
+  if (/thang\s*nay|thang\s*hien\s*tai|current\s*month/i.test(normalizedText)) {
+    const currentMonth = currentDate.getUTCMonth() + 1;
+    return {
+      filter: monthRange(detectedYear, currentMonth),
+      scopeLabel: `tháng ${currentMonth}/${detectedYear}`,
+    };
+  }
+
+  const monthMatch = normalizedText.match(/thang\s*(\d{1,2})/i);
+  if (monthMatch) {
+    const month = Number(monthMatch[1]);
+    if (month >= 1 && month <= 12) {
+      return {
+        filter: monthRange(detectedYear, month),
+        scopeLabel: `tháng ${month}/${detectedYear}`,
+      };
+    }
+  }
+
+  const quarterMatch = normalizedText.match(/q([1-4])/i) ?? normalizedText.match(/quy\s*([1-4])/i);
+  if (quarterMatch) {
+    const quarter = Number(quarterMatch[1]);
+    return {
+      filter: monthRangeFromQuarter(detectedYear, quarter),
+      scopeLabel: `Q${quarter}/${detectedYear}`,
+    };
+  }
+
+  if (/nam\s*20\d{2}|năm\s*20\d{2}|year\s*20\d{2}/i.test(message)) {
+    return {
+      filter: yearRange(detectedYear),
+      scopeLabel: `năm ${detectedYear}`,
+    };
+  }
+
+  return {
+    filter: {},
+    scopeLabel: "toàn hệ thống hiện tại",
+  };
 }
 
 export async function resolveByService(auth: AuthContext, intent: AiIntent, message: string): Promise<AiResolution | null> {
@@ -111,13 +189,32 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
       AUDITOR: ["Đọc dữ liệu phục vụ kiểm toán theo quyền", "Tra cứu nhật ký và báo cáo được cấp", "Xem tài liệu chính sách/quy trình"],
     };
 
-    const actions = capabilityByRole[auth.role] ?? capabilityByRole.EMPLOYEE;
+    const askedRole = /\bauditor\b/i.test(normalizedText)
+      ? "AUDITOR"
+      : /\bmanager\b/i.test(normalizedText)
+        ? "MANAGER"
+        : /\baccountant\b/i.test(normalizedText)
+          ? "ACCOUNTANT"
+          : /finance[_\s-]*admin/i.test(normalizedText)
+            ? "FINANCE_ADMIN"
+            : /\bemployee\b/i.test(normalizedText)
+              ? "EMPLOYEE"
+              : null;
+
+    if (askedRole && askedRole !== auth.role) {
+      return null;
+    }
+
+    const targetRole = askedRole ?? auth.role;
+    const actions = capabilityByRole[targetRole] ?? capabilityByRole.EMPLOYEE;
 
     return withPolicy({
       intent,
       routeUsed: "SERVICE",
-      rawAnswer: `Vai trò hiện tại của bạn là ${auth.role}. Bạn có thể: ${actions.map((item, index) => `${index + 1}) ${item}`).join("; ")}.`,
-      citations: [{ source: "rbac-policy", snippet: `capability-summary-${auth.role.toLowerCase()}` }],
+      rawAnswer: askedRole
+        ? `Vai trò ${targetRole} có thể: ${actions.map((item, index) => `${index + 1}) ${item}`).join("; ")}.`
+        : `Vai trò hiện tại của bạn là ${auth.role}. Bạn có thể: ${actions.map((item, index) => `${index + 1}) ${item}`).join("; ")}.`,
+      citations: [{ source: "rbac-policy", snippet: `capability-summary-${targetRole.toLowerCase()}` }],
       suggestedActions: ["Hỏi rõ theo nghiệp vụ: thu/chi, ngân sách, phê duyệt, báo cáo", "Yêu cầu kiểm tra quyền nếu thao tác bị chặn"],
     });
   }
@@ -174,15 +271,43 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
   }
 
   if ((KPI_SUMMARY_PATTERN.test(message) || /tổng\s*chi|tổng\s*thu|total\s*expense|total\s*income/i.test(message) || ((intent === "QUERY" || intent === "ANALYSIS") && /thu.*chi|chi.*thu/i.test(message))) && canUseReport(auth)) {
-    const overview = await tryService(() => getReportsOverview(auth, {}));
+    const reportScope = detectReportScope(message, normalizedText);
+    const departmentScope = await detectDepartmentScope(message);
+    const reportFilter = {
+      ...reportScope.filter,
+      ...(departmentScope ? { departmentId: departmentScope.id } : {}),
+    };
+
+    const overview = await tryService(() => getReportsOverview(auth, reportFilter));
     if (!overview) return null;
 
     const wantsBudget = /tổng ngân sách|ngân sách hiện tại|budget/i.test(message);
     const wantsRemaining = /số dư|còn lại|remaining|balance/i.test(message);
+    const wantsSpent = /tong\s*chi|chi\s*hien\s*tai|total\s*expense/i.test(normalizedText);
+    const wantsIncome = /tong\s*thu|thu\s*hien\s*tai|total\s*income/i.test(normalizedText);
+    const wantsBothIncomeAndSpent = /tong\s*thu\s*(va|&)\s*tong\s*chi|thu\s*va\s*chi|income\s*and\s*expense/i.test(normalizedText);
+    const wantsNet = /thu\s*tru\s*chi|thu\s*trừ\s*chi|tong\s*thu\s*tru\s*tong\s*chi|chenh\s*lech|lãi\s*lỗ|lai\s*lo/i.test(normalizedText);
 
-    const answer = wantsBudget || wantsRemaining
-      ? `Tổng ngân sách hiện tại: ${overview.kpis.totalBudget.toLocaleString("vi-VN")} VND; tổng chi hiện tại: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND; tổng thu hiện tại: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND; số dư còn lại: ${overview.kpis.remainingBalance.toLocaleString("vi-VN")} VND.`
-      : `Tổng chi hiện tại: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND; tổng thu hiện tại: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND.`;
+    const scopeParts = [reportScope.scopeLabel];
+    if (departmentScope) {
+      scopeParts.push(`phòng ban ${departmentScope.name} (${departmentScope.code})`);
+    }
+    const scopeText = `Phạm vi: ${scopeParts.join(", ")}.`;
+
+    let answer = `Tổng chi: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND; tổng thu: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND. ${scopeText}`;
+
+    if (wantsBudget || wantsRemaining) {
+      answer = `Tổng ngân sách: ${overview.kpis.totalBudget.toLocaleString("vi-VN")} VND; tổng chi: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND; tổng thu: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND; số dư còn lại: ${overview.kpis.remainingBalance.toLocaleString("vi-VN")} VND. ${scopeText}`;
+    } else if (wantsNet) {
+      const net = overview.kpis.totalIncome - overview.kpis.totalSpent;
+      answer = `Chênh lệch thu trừ chi là ${net.toLocaleString("vi-VN")} VND. ${scopeText}`;
+    } else if (wantsBothIncomeAndSpent || (wantsSpent && wantsIncome)) {
+      answer = `Tổng thu: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND; tổng chi: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND. ${scopeText}`;
+    } else if (wantsSpent && !wantsIncome) {
+      answer = `Tổng chi: ${overview.kpis.totalSpent.toLocaleString("vi-VN")} VND. ${scopeText}`;
+    } else if (wantsIncome && !wantsSpent) {
+      answer = `Tổng thu: ${overview.kpis.totalIncome.toLocaleString("vi-VN")} VND. ${scopeText}`;
+    }
 
     return {
       intent,
@@ -194,6 +319,10 @@ export async function resolveByService(auth: AuthContext, intent: AiIntent, mess
         totalSpent: overview.kpis.totalSpent,
         totalIncome: overview.kpis.totalIncome,
         remainingBalance: overview.kpis.remainingBalance,
+        scope: {
+          period: reportScope.scopeLabel,
+          department: departmentScope ? `${departmentScope.name} (${departmentScope.code})` : null,
+        },
       },
       suggestedActions: ["Xem thêm theo từng tháng", "Lọc theo phòng ban để đối chiếu"],
     };

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppError } from "@/modules/shared/errors/app-error";
+
 import type { AiIntent, AiResolution } from "../types";
 import { handleAiChat } from "./chat-orchestrator";
 import { resolveAiPolicy } from "./ai-policy";
@@ -169,6 +171,21 @@ describe("chat-orchestrator routing", () => {
     expect(resolveByRagMock).not.toHaveBeenCalled();
   });
 
+  it("routes guidance doc question to RAG before runtime paths", async () => {
+    resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
+    resolveByServiceMock.mockResolvedValue(null);
+    resolveByRagMock.mockResolvedValue({
+      answer: "Nộp chứng từ trong vòng 07 ngày làm việc.",
+      citations: [{ source: "docs/mock_nghiep_vu_hoan_ung_cong_tac.txt", snippet: "07 ngày làm việc" }],
+    });
+
+    const result = await handleAiChat(buildInput("Theo mock, nộp chứng từ hoàn ứng trong bao nhiêu ngày?"));
+
+    expect(result.intent).toBe("GUIDANCE");
+    expect(result.routeUsed).toBe("RAG");
+    expect(resolveByText2SqlMock).not.toHaveBeenCalled();
+  });
+
   it("falls back to TEXT2SQL when service misses and RAG looks insufficient", async () => {
     resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
     resolveByServiceMock.mockResolvedValue(null);
@@ -204,37 +221,44 @@ describe("chat-orchestrator routing", () => {
     expect(resolveByRagMock).not.toHaveBeenCalled();
   });
 
-  it("returns controlled RBAC message when TEXT2SQL throws for service-data question", async () => {
+  it("returns controlled RBAC message when TEXT2SQL is forbidden", async () => {
     resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
     resolveByServiceMock.mockResolvedValue(null);
     resolveByRagMock.mockResolvedValue({
       answer: "Hiện chưa đủ nguồn, vào trang help để xem hướng dẫn",
       citations: [{ source: "docs/context.md", snippet: "fallback" }],
     });
-    resolveByText2SqlMock.mockRejectedValue(new Error("blocked"));
+    resolveByText2SqlMock.mockRejectedValue(new AppError("blocked", "FORBIDDEN"));
 
     const result = await handleAiChat(buildInput("Chi phí hiện tại của phòng Marketing?"));
 
     expect(resolveByText2SqlMock).toHaveBeenCalledTimes(1);
     expect(result.routeUsed).toBe("SERVICE");
     expect(result.answer).toContain("phạm vi quyền hiện tại");
+    expect(result.relatedData).toMatchObject({
+      text2sqlFailureType: "forbidden",
+      resolutionReason: "policy_scope_fallback",
+    });
   });
 
-  it("returns controlled RBAC message for data-runtime policy when retrieval paths are unavailable", async () => {
+  it("returns temporary runtime message for transient TEXT2SQL failure", async () => {
     resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
     resolveByServiceMock.mockResolvedValue(null);
     resolveByRagMock.mockResolvedValue({
       answer: "Hiện chưa đủ nguồn, vào trang help để xem hướng dẫn",
       citations: [{ source: "docs/context.md", snippet: "fallback" }],
     });
-    resolveByText2SqlMock.mockRejectedValue(new Error("blocked"));
+    resolveByText2SqlMock.mockRejectedValue(new Error("upstream timeout"));
 
-    const result = await handleAiChat(buildInput("Có bao nhiêu bản ghi nhật ký hệ thống gần nhất?"));
+    const result = await handleAiChat(buildInput("Tổng chi tháng này là bao nhiêu?"));
 
+    expect(resolveByText2SqlMock).toHaveBeenCalledTimes(1);
     expect(result.routeUsed).toBe("SERVICE");
-    expect(result.answer).toContain("phạm vi quyền hiện tại");
-    expect(result.policyKey).toBe("security-logs");
-    expect(result.dataDomain).toBe("DATA_RUNTIME");
+    expect(result.answer).toContain("chưa truy xuất được dữ liệu thời gian thực");
+    expect(result.relatedData).toMatchObject({
+      text2sqlFailureType: "temporary",
+      resolutionReason: "runtime_temporary_failure",
+    });
   });
 
   it("does not call service resolver for disallowed fx-management role", async () => {

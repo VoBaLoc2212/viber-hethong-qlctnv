@@ -122,4 +122,42 @@ describe("rag-service", () => {
     expect(result.answer).toContain("Bước 2: Quản lý phê duyệt");
     expect(result.citations[0].source).toBe("quy_trinh.docx");
   });
+
+  it("returns entity-focused answer for manager question", async () => {
+    searchKnowledgeChunksMock.mockResolvedValue([
+      {
+        source: "mock_quy_trinh_phe_duyet_chi_phi.txt",
+        snippet: "chunk #0",
+        content: "Bước 3: Phê duyệt cấp quản lý\n- MANAGER xem xét lý do chi tiêu.\n- Có thể APPROVE hoặc REJECT.",
+      },
+    ]);
+
+    const result = await resolveByRag("Trong quy trình, MANAGER làm gì?", {
+      userId: "u1",
+      role: "MANAGER",
+      email: "m@example.com",
+    });
+
+    expect(result.answer).toContain("MANAGER xem xét lý do chi tiêu");
+    expect(result.answer).not.toContain("Bước 1");
+  });
+
+  it("returns evidence-focused answer for settlement documents", async () => {
+    searchKnowledgeChunksMock.mockResolvedValue([
+      {
+        source: "mock_nghiep_vu_hoan_ung_cong_tac.txt",
+        snippet: "chunk #0",
+        content: "II. Bộ chứng từ bắt buộc\n- Quyết định cử đi công tác.\n- Vé tàu/xe/máy bay hoặc hóa đơn lưu trú.\n- Hóa đơn chi phí phát sinh hợp lệ.",
+      },
+    ]);
+
+    const result = await resolveByRag("Bộ chứng từ bắt buộc khi hoàn ứng công tác phí gồm gì?", {
+      userId: "u1",
+      role: "MANAGER",
+      email: "m@example.com",
+    });
+
+    expect(result.answer).toContain("Bộ chứng từ bắt buộc");
+    expect(result.answer).toContain("hóa đơn");
+  });
 });

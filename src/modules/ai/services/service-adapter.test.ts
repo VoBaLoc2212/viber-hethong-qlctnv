@@ -8,10 +8,12 @@ const {
   listBudgetsMock,
   prismaDepartmentFindManyMock,
   prismaTransactionFindManyMock,
+  getReportsOverviewMock,
 } = vi.hoisted(() => ({
   listBudgetsMock: vi.fn(),
   prismaDepartmentFindManyMock: vi.fn(),
   prismaTransactionFindManyMock: vi.fn(),
+  getReportsOverviewMock: vi.fn(),
 }));
 
 vi.mock("@/modules/budgeting", () => ({
@@ -30,7 +32,7 @@ vi.mock("@/lib/db/prisma/client", () => ({
 }));
 
 vi.mock("@/modules/report", () => ({
-  getReportsOverview: vi.fn(),
+  getReportsOverview: getReportsOverviewMock,
 }));
 
 vi.mock("@/modules/transaction", () => ({
@@ -134,10 +136,72 @@ describe("service-adapter budget routing", () => {
     expect(result?.citations[0].source).toBe("rbac-policy");
   });
 
+  it("returns null for asked different role capability to let RAG/docs handle", async () => {
+    const result = await resolveByService(auth, "GUIDANCE", "Theo mock, AUDITOR có quyền gì?");
+
+    expect(result).toBeNull();
+  });
+
   it("keeps generic non-service query unresolved", async () => {
     const result = await resolveByService(auth, "QUERY", "ban la ai");
 
     expect(result).toBeNull();
     expect(listBudgetsMock).not.toHaveBeenCalled();
+  });
+
+  it("uses month scope when question asks current month total expense", async () => {
+    getReportsOverviewMock.mockResolvedValue({
+      kpis: {
+        totalBudget: 100000000,
+        totalSpent: 17000000,
+        totalIncome: 80000000,
+        remainingBalance: 63000000,
+      },
+    });
+
+    const result = await resolveByService(auth, "QUERY", "Tổng chi tháng này là bao nhiêu?");
+
+    expect(result?.routeUsed).toBe("SERVICE");
+    expect(result?.rawAnswer).toContain("Tổng chi");
+    expect(result?.rawAnswer).toContain("Phạm vi:");
+    expect(getReportsOverviewMock).toHaveBeenCalledTimes(1);
+    const reportFilter = getReportsOverviewMock.mock.calls[0][1] as { fromDate?: string; toDate?: string };
+    expect(reportFilter.fromDate).toBeDefined();
+    expect(reportFilter.toDate).toBeDefined();
+  });
+
+  it("uses department scope for net income-expense question", async () => {
+    getReportsOverviewMock.mockResolvedValue({
+      kpis: {
+        totalBudget: 100000000,
+        totalSpent: 30000000,
+        totalIncome: 90000000,
+        remainingBalance: 60000000,
+      },
+    });
+
+    const result = await resolveByService(auth, "QUERY", "Lấy tổng thu trừ tổng chi của Marketing");
+
+    expect(result?.routeUsed).toBe("SERVICE");
+    expect(result?.rawAnswer).toContain("Chênh lệch thu trừ chi");
+    const reportFilter = getReportsOverviewMock.mock.calls[0][1] as { departmentId?: string };
+    expect(reportFilter.departmentId).toBe("d1");
+  });
+
+  it("returns both total income and total expense when user asks both", async () => {
+    getReportsOverviewMock.mockResolvedValue({
+      kpis: {
+        totalBudget: 150000000,
+        totalSpent: 17000000,
+        totalIncome: 80000000,
+        remainingBalance: 133000000,
+      },
+    });
+
+    const result = await resolveByService(auth, "QUERY", "Cho cả tổng thu và tổng chi hiện tại trong cùng một câu trả lời");
+
+    expect(result?.routeUsed).toBe("SERVICE");
+    expect(result?.rawAnswer).toContain("Tổng thu:");
+    expect(result?.rawAnswer).toContain("tổng chi:");
   });
 });

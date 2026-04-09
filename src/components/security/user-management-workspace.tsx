@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { apiDeleteUser, apiRegisterUser, apiUpdateUser } from "@/lib/api";
+import { apiListUsers, apiRegisterUser, apiUpdateUser } from "@/lib/api";
 import type { AuthUser } from "@/lib/api";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getRoleLabel } from "@/lib/ui-labels";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type UserManagementWorkspaceProps = {
   token: string | null;
@@ -23,6 +24,8 @@ type UserRole = "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDIT
 
 export function UserManagementWorkspace({ token, currentUser }: UserManagementWorkspaceProps) {
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<AuthUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const [registerForm, setRegisterForm] = useState({
     username: "",
@@ -41,7 +44,33 @@ export function UserManagementWorkspace({ token, currentUser }: UserManagementWo
     isActive: true,
   });
 
-  const [deleteUserId, setDeleteUserId] = useState("");
+
+  async function loadUsers() {
+    if (!token || currentUser?.role !== "FINANCE_ADMIN") {
+      setUsers([]);
+      return;
+    }
+
+    setLoadingUsers(true);
+
+    try {
+      const payload = await apiListUsers(token);
+      setUsers(payload.users);
+    } catch (unknownError) {
+      const message =
+        typeof unknownError === "object" && unknownError && "message" in unknownError
+          ? String((unknownError as { message: unknown }).message)
+          : "Không tải được danh sách người dùng";
+      setError(message);
+      setUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadUsers();
+  }, [token, currentUser?.role]);
 
   async function handleRegisterUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +87,7 @@ export function UserManagementWorkspace({ token, currentUser }: UserManagementWo
         email: "",
         role: "EMPLOYEE",
       });
+      await loadUsers();
     } catch (unknownError) {
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
@@ -81,6 +111,7 @@ export function UserManagementWorkspace({ token, currentUser }: UserManagementWo
         role: updateForm.role,
         isActive: updateForm.isActive,
       });
+      await loadUsers();
     } catch (unknownError) {
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
@@ -90,30 +121,12 @@ export function UserManagementWorkspace({ token, currentUser }: UserManagementWo
     }
   }
 
-  async function handleDeleteUser(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !deleteUserId) return;
-
-    setError(null);
-
-    try {
-      await apiDeleteUser(token, deleteUserId);
-      setDeleteUserId("");
-    } catch (unknownError) {
-      const message =
-        typeof unknownError === "object" && unknownError && "message" in unknownError
-          ? String((unknownError as { message: unknown }).message)
-          : "Xóa người dùng thất bại";
-      setError(message);
-    }
-  }
-
   return (
     <section className="space-y-6">
       <Card className="border-border/50 shadow-sm">
         <CardHeader className="pb-3">
           <CardTitle>Quản lý người dùng</CardTitle>
-          <CardDescription>Tạo tài khoản, cập nhật vai trò và xóa tài khoản.</CardDescription>
+          <CardDescription>Tạo tài khoản và quản lý khóa/mở khóa người dùng.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!token ? (
@@ -136,7 +149,49 @@ export function UserManagementWorkspace({ token, currentUser }: UserManagementWo
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <Card className="border-border/50 shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <div>
+            <CardTitle>Danh sách người dùng</CardTitle>
+            <CardDescription>Xem toàn bộ user, role và ID để thao tác nhanh.</CardDescription>
+          </div>
+          <Button type="button" variant="outline" onClick={() => void loadUsers()} disabled={!token || currentUser?.role !== "FINANCE_ADMIN" || loadingUsers}>
+            {loadingUsers ? "Đang tải..." : "Làm mới"}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {!token || currentUser?.role !== "FINANCE_ADMIN" ? (
+            <p className="text-sm text-muted-foreground">Chỉ {getRoleLabel("FINANCE_ADMIN")} được xem danh sách đầy đủ.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>ID</TableHead>
+                  <TableHead>Tên đăng nhập</TableHead>
+                  <TableHead>Họ và tên</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Vai trò</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-mono text-xs">{user.id}</TableCell>
+                    <TableCell>{user.username}</TableCell>
+                    <TableCell>{user.fullName || "-"}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>{getRoleLabel(user.role)}</TableCell>
+                    <TableCell>{user.isActive ? "Hoạt động" : "Khóa"}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Card className="border-border/50 shadow-sm">
           <CardHeader>
             <CardTitle>Tạo người dùng</CardTitle>
@@ -217,7 +272,7 @@ export function UserManagementWorkspace({ token, currentUser }: UserManagementWo
 
         <Card className="border-border/50 shadow-sm">
           <CardHeader>
-            <CardTitle>Cập nhật người dùng</CardTitle>
+            <CardTitle>Khóa / Mở khóa người dùng</CardTitle>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={handleUpdateUser}>
@@ -293,41 +348,19 @@ export function UserManagementWorkspace({ token, currentUser }: UserManagementWo
                     }))
                   }
                 />
-                <Label htmlFor="update-active">Hoạt động</Label>
+                <Label htmlFor="update-active">Mở khóa tài khoản (bật để hoạt động)</Label>
               </div>
 
               <Button
                 type="submit"
                 disabled={!token || (currentUser?.role !== "FINANCE_ADMIN" && updateForm.id !== currentUser?.id)}
               >
-                Cập nhật người dùng
+                Lưu thay đổi khóa/mở khóa
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>Xóa người dùng</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={handleDeleteUser}>
-              <div className="space-y-2">
-                <Label htmlFor="delete-user-id">ID người dùng</Label>
-                <Input
-                  id="delete-user-id"
-                  value={deleteUserId}
-                  onChange={(event) => setDeleteUserId(event.target.value)}
-                  required
-                />
-              </div>
-
-              <Button type="submit" variant="destructive" disabled={!token || currentUser?.role !== "FINANCE_ADMIN"}>
-                Xóa người dùng
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
       </div>
     </section>
   );

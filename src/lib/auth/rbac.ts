@@ -14,6 +14,7 @@ export const ROLE_LANDING_PATH: Record<UserRole, string> = {
 const ALL_ROLES: UserRole[] = ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"];
 const ANALYST_ROLES: UserRole[] = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"];
 const SECURITY_ROLES: UserRole[] = ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"];
+const APPROVAL_READ_ROLES: UserRole[] = ["MANAGER", "ACCOUNTANT", "AUDITOR"];
 const FINANCE_ADMIN_ONLY: UserRole[] = ["FINANCE_ADMIN"];
 
 export const ROUTE_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
@@ -23,7 +24,7 @@ export const ROUTE_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   { matcher: /^\/fx-rates(?:\/.*)?$/, roles: FINANCE_ADMIN_ONLY },
   { matcher: /^\/budgeting(?:\/.*)?$/, roles: ANALYST_ROLES },
   { matcher: /^\/budgets(?:\/.*)?$/, roles: ANALYST_ROLES },
-  { matcher: /^\/approvals(?:\/.*)?$/, roles: ANALYST_ROLES },
+  { matcher: /^\/approvals(?:\/.*)?$/, roles: APPROVAL_READ_ROLES },
   {
     matcher: /^\/(?:dashboard|transactions|reimbursement|ai-assistant)(?:\/.*)?$/,
     roles: ALL_ROLES,
@@ -45,7 +46,7 @@ export const API_ROLE_RULES: Array<{ matcher: RegExp; roles: UserRole[] }> = [
   },
   {
     matcher: /^\/api\/approvals(?:\/.*)?$/,
-    roles: ANALYST_ROLES,
+    roles: APPROVAL_READ_ROLES,
   },
   {
     matcher: /^\/api\/reimbursements(?:\/.*)?$/,
@@ -127,7 +128,7 @@ export const NAV_ITEMS: Array<{
     href: "/approvals",
     label: "Quy trình duyệt chi",
     icon: "approvals",
-    roles: ANALYST_ROLES,
+    roles: APPROVAL_READ_ROLES,
   },
   {
     href: "/reimbursement",

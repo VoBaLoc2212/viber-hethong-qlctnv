@@ -163,7 +163,7 @@ export async function listTransactions(auth: AuthContext, filter: ListTransactio
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       skip,
       take: limit,
     }),
@@ -222,6 +222,7 @@ export async function createTransaction(auth: AuthContext, payload: CreateTransa
   if (txType === "EXPENSE") {
     ensureExpenseStatus(status);
   } else {
+    requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
     ensureIncomeStatus(status);
   }
 
@@ -614,7 +615,7 @@ export async function changeTransactionStatus(
 
       switch (payload.action) {
       case "manager_approve": {
-        requireRole(auth, ["MANAGER", "FINANCE_ADMIN"]);
+        requireRole(auth, ["MANAGER"]);
         if (tx.status !== "PENDING") {
           throw new AppError("Only PENDING transaction can be manager-approved", "UNPROCESSABLE_ENTITY");
         }
@@ -655,7 +656,7 @@ export async function changeTransactionStatus(
         break;
       }
       case "accountant_approve": {
-        requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+        requireRole(auth, ["ACCOUNTANT"]);
         if (tx.status !== "APPROVED") {
           throw new AppError("Only manager-approved transaction can be accountant-approved", "UNPROCESSABLE_ENTITY");
         }
@@ -706,7 +707,7 @@ export async function changeTransactionStatus(
         break;
       }
       case "reject": {
-        requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
+        requireRole(auth, ["MANAGER", "ACCOUNTANT"]);
         if (tx.status !== "PENDING" && tx.status !== "APPROVED") {
           throw new AppError("Only PENDING/APPROVED transaction can be rejected", "UNPROCESSABLE_ENTITY");
         }
@@ -757,7 +758,7 @@ export async function changeTransactionStatus(
         break;
       }
         case "execute": {
-          requireRole(auth, ["ACCOUNTANT", "FINANCE_ADMIN"]);
+          requireRole(auth, ["ACCOUNTANT"]);
           if (!idempotencyKey) {
             throw new AppError("idempotency-key header is required for execute action", "INVALID_INPUT");
           }

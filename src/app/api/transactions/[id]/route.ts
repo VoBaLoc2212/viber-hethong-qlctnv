@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest, ctx: Params) {
 
   try {
     const auth = await requireAuth(request);
-    requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
+    requireRole(auth, ["MANAGER", "ACCOUNTANT"]);
 
     const { id } = await ctx.params;
     const body = await readJsonBody<{

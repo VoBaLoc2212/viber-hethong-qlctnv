@@ -34,6 +34,31 @@ function generateIdempotencyKey(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
+function parseCompositeValue(input: string): { left: string; right: string } | null {
+  const normalized = input.trim();
+  const delimiterIndex = normalized.indexOf(":");
+  if (delimiterIndex <= 0 || delimiterIndex >= normalized.length - 1) {
+    return null;
+  }
+
+  return {
+    left: normalized.slice(0, delimiterIndex).trim(),
+    right: normalized.slice(delimiterIndex + 1).trim(),
+  };
+}
+
+function normalizeIsoDateInput(input: string): string {
+  const value = input.trim();
+  if (!value) return "";
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toISOString();
+}
+
 export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps) {
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntryItem[]>([]);
@@ -117,12 +142,15 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
     setError(null);
 
     try {
+      const parsedEntity = parseCompositeValue(logFilter.entityId);
+      const parsedUser = parseCompositeValue(logFilter.userId);
+
       const payload = await apiListLogs(token, {
-        entityType: logFilter.entityType || undefined,
-        entityId: logFilter.entityId || undefined,
-        userId: logFilter.userId || undefined,
-        fromDate: logFilter.fromDate || undefined,
-        toDate: logFilter.toDate || undefined,
+        entityType: (parsedEntity?.left || logFilter.entityType).trim() || undefined,
+        entityId: (parsedEntity?.right || logFilter.entityId).trim() || undefined,
+        userId: (parsedUser?.right || logFilter.userId).trim() || undefined,
+        fromDate: normalizeIsoDateInput(logFilter.fromDate) || undefined,
+        toDate: normalizeIsoDateInput(logFilter.toDate) || undefined,
       });
 
       setLogs(payload.logs);
@@ -143,9 +171,11 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
     setError(null);
 
     try {
+      const parsedReference = parseCompositeValue(ledgerFilter.referenceId);
+
       const payload = await apiListLedger(token, {
-        referenceType: ledgerFilter.referenceType || undefined,
-        referenceId: ledgerFilter.referenceId || undefined,
+        referenceType: (parsedReference?.left || ledgerFilter.referenceType).trim() || undefined,
+        referenceId: (parsedReference?.right || ledgerFilter.referenceId).trim() || undefined,
       });
 
       setLedgerEntries(payload.entries);
@@ -168,8 +198,8 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
     try {
       await apiCreateReversal(
         token,
-        ledgerFilter.reversalTargetId,
-        ledgerFilter.reversalReason,
+        ledgerFilter.reversalTargetId.trim(),
+        ledgerFilter.reversalReason.trim(),
         generateIdempotencyKey("ledger-reversal"),
       );
 
@@ -227,6 +257,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                           <Label htmlFor="log-entity-type">Loại đối tượng</Label>
                           <Input
                             id="log-entity-type"
+                            placeholder="VD: TRANSACTION"
                             value={logFilter.entityType}
                             onChange={(event) => setLogFilter((prev) => ({ ...prev, entityType: event.target.value }))}
                           />
@@ -236,6 +267,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                           <Label htmlFor="log-entity-id">ID đối tượng</Label>
                           <Input
                             id="log-entity-id"
+                            placeholder="VD: <entityId> hoặc TRANSACTION:<entityId>"
                             value={logFilter.entityId}
                             onChange={(event) => setLogFilter((prev) => ({ ...prev, entityId: event.target.value }))}
                           />
@@ -245,6 +277,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                           <Label htmlFor="log-user-id">ID người dùng</Label>
                           <Input
                             id="log-user-id"
+                            placeholder="VD: <userId> hoặc user:<userId>"
                             value={logFilter.userId}
                             onChange={(event) => setLogFilter((prev) => ({ ...prev, userId: event.target.value }))}
                           />
@@ -254,6 +287,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                           <Label htmlFor="log-from-date">Từ ngày (ISO)</Label>
                           <Input
                             id="log-from-date"
+                            placeholder="VD: 2026-04-09 hoặc 2026-04-09T00:00:00.000Z"
                             value={logFilter.fromDate}
                             onChange={(event) => setLogFilter((prev) => ({ ...prev, fromDate: event.target.value }))}
                           />
@@ -263,6 +297,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                           <Label htmlFor="log-to-date">Đến ngày (ISO)</Label>
                           <Input
                             id="log-to-date"
+                            placeholder="VD: 2026-04-09 hoặc 2026-04-09T23:59:59.999Z"
                             value={logFilter.toDate}
                             onChange={(event) => setLogFilter((prev) => ({ ...prev, toDate: event.target.value }))}
                           />
@@ -285,6 +320,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                           <Label htmlFor="ledger-reference-type">Loại tham chiếu</Label>
                           <Input
                             id="ledger-reference-type"
+                            placeholder="VD: TRANSACTION"
                             value={ledgerFilter.referenceType}
                             onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceType: event.target.value }))}
                           />
@@ -294,6 +330,7 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
                           <Label htmlFor="ledger-reference-id">ID tham chiếu</Label>
                           <Input
                             id="ledger-reference-id"
+                            placeholder="VD: <referenceId> hoặc TRANSACTION:<referenceId>"
                             value={ledgerFilter.referenceId}
                             onChange={(event) => setLedgerFilter((prev) => ({ ...prev, referenceId: event.target.value }))}
                           />
@@ -363,6 +400,9 @@ export function SecurityWorkspace({ token, currentUser }: SecurityWorkspaceProps
           <CardContent className="space-y-6">
             {canCreateReversal ? (
               <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateReversal}>
+                <div className="md:col-span-2 rounded-md border border-border/50 bg-muted/30 p-3 text-xs text-muted-foreground">
+                  Có thể nhập <strong>UUID id</strong> hoặc <strong>mã bút toán (entryCode)</strong>, ví dụ: <strong>LED-20260409-001</strong>.
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="reversal-target-id">ID bút toán sổ cái cần đảo</Label>
                   <Input

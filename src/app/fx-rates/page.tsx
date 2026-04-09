@@ -17,7 +17,7 @@ const LIMIT = 20;
 export default function FxRatesPage() {
   const router = useRouter();
   const pathname = usePathname();
-  const { currentUser } = useAuthSession();
+  const { token, currentUser, initializing } = useAuthSession();
 
   const [q, setQ] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
@@ -37,16 +37,23 @@ export default function FxRatesPage() {
     setPage(Math.max(1, Number(params.get("page") ?? 1) || 1));
   }, [pathname]);
 
-  const { data, isLoading, error } = useGetFxRates({
-    page,
-    limit: LIMIT,
-    q: q || undefined,
-    source: sourceFilter || undefined,
-    fromCurrency: "USD",
-    toCurrency: "VND",
-    rateDateFrom: rateDateFrom || undefined,
-    rateDateTo: rateDateTo || undefined,
-  });
+  const { data, isLoading, error } = useGetFxRates(
+    {
+      page,
+      limit: LIMIT,
+      q: q || undefined,
+      source: sourceFilter || undefined,
+      fromCurrency: "USD",
+      toCurrency: "VND",
+      rateDateFrom: rateDateFrom || undefined,
+      rateDateTo: rateDateTo || undefined,
+    },
+    {
+      enabled: !initializing && Boolean(token) && isFinanceAdmin,
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  );
 
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -148,7 +155,7 @@ export default function FxRatesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error ? <p className="text-sm text-destructive">{error.message}</p> : null}
+          {!initializing && token && isFinanceAdmin && error ? <p className="text-sm text-destructive">{error.message}</p> : null}
 
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Đang tải dữ liệu tỷ giá...</p>

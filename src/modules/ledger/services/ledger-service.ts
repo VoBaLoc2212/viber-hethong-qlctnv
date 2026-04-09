@@ -112,23 +112,31 @@ export async function reverseLedgerEntry(
     throw new AppError("reason is required", "INVALID_INPUT");
   }
 
+  const targetKey = id.trim();
+  if (!targetKey) {
+    throw new AppError("ledger entry id is required", "INVALID_INPUT");
+  }
+
+  const target =
+    (await prisma.ledgerEntry.findUnique({ where: { id: targetKey } }))
+    ?? (await prisma.ledgerEntry.findUnique({ where: { entryCode: targetKey } }));
+
+  if (!target) {
+    throw new AppError("Ledger entry not found", "NOT_FOUND");
+  }
+
   const existingReversal = await prisma.ledgerEntry.findFirst({
-    where: { reversalOfId: id },
+    where: { reversalOfId: target.id },
   });
 
   if (existingReversal) {
     return {
       reversalEntryId: existingReversal.id,
-      targetEntryId: id,
+      targetEntryId: target.id,
       replayed: true,
       idempotencyKey,
       createdAt: existingReversal.createdAt.toISOString(),
     };
-  }
-
-  const target = await prisma.ledgerEntry.findUnique({ where: { id } });
-  if (!target) {
-    throw new AppError("Ledger entry not found", "NOT_FOUND");
   }
 
   if (target.type === "REVERSAL") {
@@ -309,7 +317,7 @@ export async function reverseLedgerEntry(
 
   return {
     reversalEntryId: reversal.id,
-    targetEntryId: id,
+    targetEntryId: target.id,
     replayed: false,
     idempotencyKey,
     createdAt: reversal.createdAt.toISOString(),

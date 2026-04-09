@@ -82,7 +82,34 @@ const CASHBOOK_READ_ROLES: UserRole[] = ["ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR
 const CASHBOOK_RECONCILE_ROLES: UserRole[] = ["ACCOUNTANT", "FINANCE_ADMIN"];
 const CREATE_TRANSACTION_ROLES: UserRole[] = ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"];
 
+function getExtractionStatusLabel(status: NonNullable<UploadedTransactionAttachment["extraction"]>["status"]) {
+  switch (status) {
+    case "SUCCESS":
+      return "Đã trích xuất";
+    case "PARTIAL":
+      return "Trích xuất một phần";
+    case "FAILED":
+      return "Trích xuất thất bại";
+    default:
+      return "Bỏ qua trích xuất";
+  }
+}
+
+function getExtractionStatusClass(status: NonNullable<UploadedTransactionAttachment["extraction"]>["status"]) {
+  switch (status) {
+    case "SUCCESS":
+      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    case "PARTIAL":
+      return "bg-amber-50 text-amber-700 border-amber-200";
+    case "FAILED":
+      return "bg-rose-50 text-rose-700 border-rose-200";
+    default:
+      return "bg-slate-50 text-slate-700 border-slate-200";
+  }
+}
+
 type TransactionStatusFilter = "ALL" | TransactionItem["status"];
+type TxSplitFormRow = { amount: string; categoryCode: string; note: string };
 
 function getLocalDateTimeInputValue(date = new Date()) {
   const offsetMs = date.getTimezoneOffset() * 60_000;
@@ -202,7 +229,7 @@ export default function TransactionsPage() {
     date: getLocalDateTimeInputValue(),
     description: "",
   });
-  const [splits, setSplits] = useState<Array<{ amount: string; categoryCode: string; note: string }>>([]);
+  const [splits, setSplits] = useState<TxSplitFormRow[]>([]);
   const [attachments, setAttachments] = useState<UploadedTransactionAttachment[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
 
@@ -460,6 +487,44 @@ export default function TransactionsPage() {
     });
   }
 
+  function applySingleExtraction(extraction: NonNullable<UploadedTransactionAttachment["extraction"]>, force = false) {
+    if ((extraction.amount?.trim() ?? "").length > 0) {
+      setTxForm((prev) => {
+        if (prev.currencyMode !== "VND") return prev;
+        if (!force && prev.amount.trim().length > 0) return prev;
+        return { ...prev, amount: extraction.amount ?? prev.amount };
+      });
+    }
+
+    if ((extraction.description?.trim() ?? "").length > 0) {
+      setTxForm((prev) => {
+        if (!force && prev.description.trim().length > 0) return prev;
+        return { ...prev, description: extraction.description ?? prev.description };
+      });
+    }
+
+    if ((extraction.splits?.length ?? 0) > 0 && (splits.length === 0 || force)) {
+      setSplits(
+        (extraction.splits ?? []).map((line) => ({
+          amount: line.amount,
+          categoryCode: line.categoryCode ?? "",
+          note: line.note ?? "",
+        })),
+      );
+    }
+  }
+
+  function applyExtractionToForm(uploaded: UploadedTransactionAttachment[]) {
+    const candidates = uploaded
+      .map((item) => item.extraction)
+      .filter((extraction): extraction is NonNullable<UploadedTransactionAttachment["extraction"]> => Boolean(extraction));
+
+    if (candidates.length === 0) return;
+
+    const preferred = candidates.find((extraction) => extraction.status === "SUCCESS") ?? candidates[0];
+    applySingleExtraction(preferred, false);
+  }
+
   async function handleCreateTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token || !canCreateTransaction) return;
@@ -558,7 +623,16 @@ export default function TransactionsPage() {
     try {
       const uploaded = await Promise.all(files.map((file) => apiUploadTransactionAttachment(token, file)));
       setAttachments((prev) => [...prev, ...uploaded]);
-      setSuccess(`Đã tải lên ${uploaded.length} file hóa đơn.`);
+      applyExtractionToForm(uploaded);
+      const extractedCount = uploaded.filter((item) => {
+        const status = item.extraction?.status;
+        return status === "SUCCESS" || status === "PARTIAL";
+      }).length;
+      setSuccess(
+        extractedCount > 0
+          ? `Đã tải lên ${uploaded.length} file hóa đơn. Tự động điền dữ liệu từ ${extractedCount} file.`
+          : `Đã tải lên ${uploaded.length} file hóa đơn.`,
+      );
     } catch (unknownError) {
       const message =
         typeof unknownError === "object" && unknownError && "message" in unknownError
@@ -773,8 +847,8 @@ export default function TransactionsPage() {
           <TabsList className="h-auto min-w-full justify-start gap-1 rounded-xl p-1">
             {canCreateTransaction ? <TabsTrigger value="create">1. Tạo phiếu</TabsTrigger> : null}
             <TabsTrigger value="list">2. Theo dõi giao dịch</TabsTrigger>
-            {canReadRecurring ? <TabsTrigger value="recurring">3. Recurring</TabsTrigger> : null}
-            {canReadCashbook ? <TabsTrigger value="cashbook">4. Cashbook & Đối soát</TabsTrigger> : null}
+            {canReadRecurring ? <TabsTrigger value="recurring">3. Định kỳ</TabsTrigger> : null}
+            {canReadCashbook ? <TabsTrigger value="cashbook">4. Quỹ tiền mặt & Đối soát</TabsTrigger> : null}
           </TabsList>
         </div>
 
@@ -984,12 +1058,30 @@ export default function TransactionsPage() {
                             <div className="lg:col-span-2">
                               <p className="text-sm font-medium">{item.fileName}</p>
                               <p className="text-xs text-muted-foreground">{item.fileUrl}</p>
+                              {item.extraction ? (
+                                <div className="mt-2 space-y-1">
+                                  <Badge variant="outline" className={`text-[10px] ${getExtractionStatusClass(item.extraction.status)}`}>
+                                    {getExtractionStatusLabel(item.extraction.status)}
+                                  </Badge>
+                                  {item.extraction.amount ? <p className="text-xs text-muted-foreground">Gợi ý số tiền: {formatMoney(item.extraction.amount)}</p> : null}
+                                  {item.extraction.description ? <p className="text-xs text-muted-foreground">Gợi ý diễn giải: {item.extraction.description}</p> : null}
+                                  {(item.extraction.splits?.length ?? 0) > 0 ? <p className="text-xs text-muted-foreground">Gợi ý chia tách: {item.extraction.splits?.length} dòng</p> : null}
+                                  {item.extraction.warnings?.length ? <p className="text-xs text-amber-600">{item.extraction.warnings[0]}</p> : null}
+                                </div>
+                              ) : null}
                             </div>
                             <p className="text-sm text-muted-foreground">{formatBytes(item.fileSize)}</p>
                             <p className="text-sm text-muted-foreground">{item.mimeType ?? "-"}</p>
-                            <Button type="button" variant="ghost" onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}>
-                              Xóa
-                            </Button>
+                            <div className="flex flex-col items-start gap-1">
+                              {item.extraction ? (
+                                <Button type="button" variant="outline" size="sm" onClick={() => applySingleExtraction(item.extraction as NonNullable<UploadedTransactionAttachment["extraction"]>, true)}>
+                                  Áp dụng gợi ý
+                                </Button>
+                              ) : null}
+                              <Button type="button" variant="ghost" onClick={() => setAttachments((prev) => prev.filter((_, i) => i !== idx))}>
+                                Xóa
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>

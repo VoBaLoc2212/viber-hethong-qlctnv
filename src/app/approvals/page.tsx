@@ -83,7 +83,12 @@ function ActionButtons({
       </div>
     );
   }
-  if (isAccountant && item.status === "APPROVED" && item.transactionStatus === "APPROVED") {
+  if (
+    isAccountant &&
+    item.transactionType === "EXPENSE" &&
+    item.status === "APPROVED" &&
+    item.transactionStatus === "APPROVED"
+  ) {
     return (
       <div className="flex gap-1 justify-end">
         <Button size="sm" className="gap-1 h-7 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => onAction(item, "execute")}>
@@ -245,7 +250,7 @@ export default function ApprovalsPage() {
                     <TableHead>Diễn giải</TableHead>
                     <TableHead className="text-right">Số tiền</TableHead>
                     <TableHead>Trạng thái sếp duyệt</TableHead>
-                    <TableHead>Trạng thái kế toán chi</TableHead>
+                    <TableHead>Trạng thái kế toán</TableHead>
                     <TableHead>Người duyệt</TableHead>
                     <TableHead>Ngày tạo</TableHead>
                     <TableHead className="text-right">Hành động</TableHead>
@@ -265,7 +270,11 @@ export default function ApprovalsPage() {
                         <StatusBadge status={item.status} />
                       </TableCell>
                       <TableCell>
-                        {item.transactionStatus === "EXECUTED" ? (
+                        {item.transactionType === "INCOME" ? (
+                          <Badge variant="outline" className={getTransactionStatusBadgeClass("EXECUTED")}>
+                            Đã thu
+                          </Badge>
+                        ) : item.transactionStatus === "EXECUTED" ? (
                           <Badge variant="outline" className={getTransactionStatusBadgeClass("EXECUTED")}>
                             Đã chi (EXECUTED)
                           </Badge>

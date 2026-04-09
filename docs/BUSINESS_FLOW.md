@@ -63,7 +63,7 @@ Ledger append
 ## 4) BUDGET TRANSFER FLOW
 
 ```txt
-[Manager tạo lệnh chuyển ngân sách]
+[Finance Admin tạo lệnh chuyển ngân sách]
         ↓
 Validate source available >= amount
         ↓

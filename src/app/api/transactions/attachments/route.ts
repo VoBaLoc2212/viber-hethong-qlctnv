@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 
+import { extractInvoiceFromAttachment } from "@/modules/ai";
 import { created, handleApiError, requireAuth, requireRole } from "@/modules/shared";
 import { AppError } from "@/modules/shared/errors/app-error";
 
@@ -23,12 +24,15 @@ export async function POST(request: NextRequest) {
     const safeName = file.name.trim() || `attachment-${Date.now()}`;
     const fileUrl = `local-upload://${encodeURIComponent(safeName)}`;
 
+    const extraction = await extractInvoiceFromAttachment(file);
+
     return created(
       {
         fileName: safeName,
         fileUrl,
         fileSize: file.size,
         mimeType: file.type || null,
+        extraction,
       },
       {},
     );

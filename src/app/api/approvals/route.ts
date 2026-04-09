@@ -6,7 +6,7 @@ import { handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
-    requireRole(auth, ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
+    requireRole(auth, ["MANAGER", "ACCOUNTANT", "AUDITOR"]);
 
     const { searchParams } = new URL(request.url);
     const result = await listApprovals(auth, {

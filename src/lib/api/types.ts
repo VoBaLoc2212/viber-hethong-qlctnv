@@ -161,6 +161,14 @@ export type UploadedTransactionAttachment = {
   fileUrl: string;
   fileSize: number;
   mimeType: string | null;
+  extraction?: {
+    status: "SUCCESS" | "PARTIAL" | "FAILED" | "SKIPPED";
+    amount?: string | null;
+    description?: string | null;
+    splits?: Array<{ amount: string; categoryCode?: string | null; note?: string | null }>;
+    confidence?: number | null;
+    warnings?: string[];
+  };
 };
 
 export type RecurringTemplateItem = {

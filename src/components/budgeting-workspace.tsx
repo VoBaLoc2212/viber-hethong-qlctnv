@@ -57,6 +57,29 @@ function generateIdempotencyKey(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
+function formatHistoryTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function getHistoryAmount(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const amountRaw = (payload as { amount?: unknown }).amount;
+  if (typeof amountRaw !== "string" && typeof amountRaw !== "number") return null;
+  const amountNumber = Number(amountRaw);
+  if (!Number.isFinite(amountNumber)) return null;
+  return formatVnd(amountNumber);
+}
+
 function buildDepartmentSummaryRows(
   departments: DepartmentWithBudgetAllocated[],
   transactions: TransactionItem[],
@@ -344,6 +367,7 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
   }, [transferSearch, budgets, budgetByDepartmentId, sourceBudgetId]);
 
   const isHardStop = selectedStatus?.hardStopEnabled && selectedStatus.available === "0.00";
+  const hasTransferOptions = transferOptions.length > 0;
 
   return (
     <section className="space-y-6">
@@ -382,13 +406,22 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
           <CardContent>
             <form className="space-y-4" onSubmit={handleCreateBudget}>
               <div className="space-y-2">
-                <Label htmlFor="create-department-id">ID phòng ban</Label>
-                <Input
+                <Label htmlFor="create-department-id">Phòng ban</Label>
+                <select
                   id="create-department-id"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={createForm.departmentId}
                   onChange={(event) => setCreateForm((prev) => ({ ...prev, departmentId: event.target.value }))}
                   required
-                />
+                  disabled={!token}
+                >
+                  <option value="">Chọn phòng ban</option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name} ({department.code})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">
@@ -413,12 +446,24 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="create-parent-budget-id">ID ngân sách cha (tùy chọn)</Label>
-                <Input
+                <Label htmlFor="create-parent-budget-id">Ngân sách cha (tùy chọn)</Label>
+                <select
                   id="create-parent-budget-id"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={createForm.parentBudgetId}
                   onChange={(event) => setCreateForm((prev) => ({ ...prev, parentBudgetId: event.target.value }))}
-                />
+                  disabled={!token}
+                >
+                  <option value="">Không chọn</option>
+                  {budgets.map((budget) => {
+                    const department = budgetByDepartmentId[budget.departmentId];
+                    return (
+                      <option key={budget.id} value={budget.id}>
+                        {(department?.name ?? budget.departmentId)} • {budget.period} • {budget.id.slice(0, 8)}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               <Button type="submit" disabled={!token}>
@@ -437,12 +482,24 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
           <CardContent>
             <form className="space-y-4" onSubmit={handleConfigurePolicy}>
               <div className="space-y-2">
-                <Label htmlFor="policy-budget-id">ID ngân sách (trống = toàn cục)</Label>
-                <Input
+                <Label htmlFor="policy-budget-id">Ngân sách áp dụng (trống = toàn cục)</Label>
+                <select
                   id="policy-budget-id"
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                   value={policyForm.budgetId}
                   onChange={(event) => setPolicyForm((prev) => ({ ...prev, budgetId: event.target.value }))}
-                />
+                  disabled={!token}
+                >
+                  <option value="">Toàn cục</option>
+                  {budgets.map((budget) => {
+                    const department = budgetByDepartmentId[budget.departmentId];
+                    return (
+                      <option key={budget.id} value={budget.id}>
+                        {(department?.name ?? budget.departmentId)} • {budget.period} • {budget.id.slice(0, 8)}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               <div className="flex items-center gap-2 pt-1">
@@ -683,9 +740,9 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
                             value={transferForm.toBudgetId}
                             onChange={(event) => setTransferForm((prev) => ({ ...prev, toBudgetId: event.target.value }))}
                             required
-                            disabled={!token || Boolean(isHardStop)}
+                            disabled={!token || Boolean(isHardStop) || !hasTransferOptions}
                           >
-                            <option value="">Chọn ngân sách nhận</option>
+                            <option value="">{hasTransferOptions ? "Chọn ngân sách nhận" : "Không có ngân sách nhận phù hợp"}</option>
                             {transferOptions.map((budget) => {
                               const department = budgetByDepartmentId[budget.departmentId];
                               return (
@@ -695,6 +752,9 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
                               );
                             })}
                           </select>
+                          {!hasTransferOptions ? (
+                            <p className="text-xs text-muted-foreground">Không có ngân sách nhận do đang lọc quá hẹp hoặc chỉ còn ngân sách nguồn.</p>
+                          ) : null}
                         </div>
 
                         <div className="space-y-2">
@@ -732,7 +792,7 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
                           </Alert>
                         ) : null}
 
-                        <Button type="submit" disabled={!token || Boolean(isHardStop)}>
+                        <Button type="submit" disabled={!token || Boolean(isHardStop) || !hasTransferOptions}>
                           Chuyển ngân sách
                         </Button>
                       </form>
@@ -752,7 +812,7 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
                           <div key={item.id} className="rounded-md border border-border/50 p-3 text-sm">
                             <div className="flex items-center justify-between gap-2">
                               <span className="font-medium">{item.action}</span>
-                              <span className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleString("vi-VN")}</span>
+                              <span className="text-xs text-muted-foreground">{formatHistoryTime(item.createdAt)}</span>
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                               <span>{item.entityType}</span>
@@ -762,6 +822,12 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
                                 <>
                                   <span>•</span>
                                   <span>{item.direction === "IN" ? "Luồng vào" : "Luồng ra"}</span>
+                                </>
+                              ) : null}
+                              {getHistoryAmount(item.payload) ? (
+                                <>
+                                  <span>•</span>
+                                  <span>Số tiền {getHistoryAmount(item.payload)}</span>
                                 </>
                               ) : null}
                             </div>

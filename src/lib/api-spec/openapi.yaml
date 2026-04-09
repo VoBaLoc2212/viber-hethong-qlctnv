@@ -1025,7 +1025,60 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      fileName:
+                        type: string
+                      fileUrl:
+                        type: string
+                      fileSize:
+                        type: integer
+                      mimeType:
+                        type: string
+                        nullable: true
+                      extraction:
+                        type: object
+                        nullable: true
+                        properties:
+                          status:
+                            type: string
+                            enum: [SUCCESS, PARTIAL, FAILED, SKIPPED]
+                          amount:
+                            type: string
+                            nullable: true
+                          description:
+                            type: string
+                            nullable: true
+                          splits:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                amount:
+                                  type: string
+                                categoryCode:
+                                  type: string
+                                  nullable: true
+                                note:
+                                  type: string
+                                  nullable: true
+                              required: [amount]
+                          confidence:
+                            type: number
+                            nullable: true
+                          warnings:
+                            type: array
+                            items:
+                              type: string
+                        required: [status]
+                    required: [fileName, fileUrl, fileSize, mimeType]
+                  meta:
+                    type: object
+                    additionalProperties: true
+                required: [data, meta]
 
   /transactions/recurring:
     get:

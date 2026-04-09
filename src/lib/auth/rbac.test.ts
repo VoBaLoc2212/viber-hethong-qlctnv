@@ -13,6 +13,7 @@ import {
 } from "./rbac";
 
 const ANALYST_ROLES: UserRole[] = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"];
+const APPROVAL_READ_ROLES: UserRole[] = ["MANAGER", "ACCOUNTANT", "AUDITOR"];
 
 describe("rbac route and nav consistency", () => {
   it("keeps budgets and budgeting routes aligned to analyst roles", () => {
@@ -20,8 +21,8 @@ describe("rbac route and nav consistency", () => {
     expect(getAllowedRolesForRoute("/budgeting")).toEqual(ANALYST_ROLES);
   });
 
-  it("keeps approvals route accessible to analyst roles including accountant and auditor", () => {
-    expect(getAllowedRolesForRoute("/approvals")).toEqual(ANALYST_ROLES);
+  it("keeps approvals route accessible to manager/accountant/auditor read scope", () => {
+    expect(getAllowedRolesForRoute("/approvals")).toEqual(APPROVAL_READ_ROLES);
   });
 
   it("keeps route roles equal to navigation roles for shared href items", () => {
@@ -56,9 +57,9 @@ describe("rbac api consistency", () => {
     expect(getAllowedRolesForApi("/api/fx-rates")).toEqual(["FINANCE_ADMIN"]);
   });
 
-  it("keeps reports and approvals api groups in analyst scope", () => {
+  it("keeps reports in analyst scope and approvals in approval-read scope", () => {
     expect(getAllowedRolesForApi("/api/reports")).toEqual(ANALYST_ROLES);
-    expect(getAllowedRolesForApi("/api/approvals")).toEqual(ANALYST_ROLES);
+    expect(getAllowedRolesForApi("/api/approvals")).toEqual(APPROVAL_READ_ROLES);
   });
 
   it("covers each nav route by at least one route rule", () => {

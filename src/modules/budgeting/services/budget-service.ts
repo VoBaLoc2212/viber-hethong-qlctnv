@@ -155,6 +155,17 @@ export async function createBudget(auth: AuthContext, payload: CreateBudgetPaylo
     throw new AppError("Department not found", "NOT_FOUND");
   }
 
+  if (payload.parentBudgetId) {
+    const parentBudget = await prisma.budget.findUnique({
+      where: { id: payload.parentBudgetId },
+      select: { id: true },
+    });
+
+    if (!parentBudget) {
+      throw new AppError("Parent budget not found", "NOT_FOUND");
+    }
+  }
+
   const budget = await prisma.budget.create({
     data: {
       departmentId: payload.departmentId,
@@ -386,7 +397,7 @@ export async function transferBudget(
   idempotencyKey: string | null,
   correlationId: string,
 ) {
-  requireRole(auth, ["FINANCE_ADMIN", "MANAGER"]);
+  requireRole(auth, ["FINANCE_ADMIN"]);
   assertNotAuditorForMutation(auth);
 
   if (!idempotencyKey) {
@@ -540,6 +551,17 @@ export async function configureHardStop(
   const warningThresholdPct = payload.warningThresholdPct ?? 80;
   if (warningThresholdPct < 1 || warningThresholdPct > 100) {
     throw new AppError("warningThresholdPct must be between 1 and 100", "INVALID_INPUT");
+  }
+
+  if (payload.budgetId) {
+    const budget = await prisma.budget.findUnique({
+      where: { id: payload.budgetId },
+      select: { id: true },
+    });
+
+    if (!budget) {
+      throw new AppError("Budget not found", "NOT_FOUND");
+    }
   }
 
   const policy = payload.budgetId

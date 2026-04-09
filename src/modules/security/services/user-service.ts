@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/db/prisma/client";
 import { type AuthContext, hashPassword, requireRole, writeAuditLog } from "@/modules/shared";
 import type { UserRole } from "@/modules/shared/contracts/domain";
@@ -150,12 +152,30 @@ export async function updateUserById(
 export async function deleteUserById(auth: AuthContext, id: string, correlationId: string) {
   requireRole(auth, ["FINANCE_ADMIN"]);
 
+  if (auth.userId === id) {
+    throw new AppError("Cannot delete current user", "UNPROCESSABLE_ENTITY");
+  }
+
   const existing = await prisma.user.findUnique({ where: { id }, select: { id: true } });
   if (!existing) {
     throw new AppError("User not found", "NOT_FOUND");
   }
 
-  await prisma.user.delete({ where: { id } });
+  try {
+    await prisma.user.delete({ where: { id } });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === "P2003"
+    ) {
+      throw new AppError(
+        "Không thể xóa người dùng này vì đã có dữ liệu phát sinh (audit log / giao dịch / sổ cái). Hãy khóa tài khoản thay vì xóa.",
+        "CONFLICT",
+      );
+    }
+
+    throw error;
+  }
 
   await writeAuditLog({
     actorId: auth.userId,

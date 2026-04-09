@@ -42,7 +42,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { NAV_ITEMS } from "@/lib/auth/rbac";
 import { useGetTransactions } from "@/lib/api-client";
 import { formatVnd, getRoleLabel, getTransactionStatusBadgeClass, getTransactionStatusLabel, getTransactionTypeLabel } from "@/lib/ui-labels";
@@ -261,6 +261,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0">
+                <SheetTitle className="sr-only">Menu điều hướng</SheetTitle>
                 <div className="flex h-16 items-center border-b border-border/50 px-6">
                   <Link
                     href="/dashboard"

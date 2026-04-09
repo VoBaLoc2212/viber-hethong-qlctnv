@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { generateWithGeminiMock, getIntentCacheMock, setIntentCacheMock } = vi.hoisted(() => ({
-  generateWithGeminiMock: vi.fn(),
+const { generateWithChatEndpointMock, getIntentCacheMock, setIntentCacheMock } = vi.hoisted(() => ({
+  generateWithChatEndpointMock: vi.fn(),
   getIntentCacheMock: vi.fn(),
   setIntentCacheMock: vi.fn(),
 }));
 
-vi.mock("./gemini-client", () => ({
-  generateWithGemini: generateWithGeminiMock,
+vi.mock("./openai-chat-client", () => ({
+  generateWithChatEndpoint: generateWithChatEndpointMock,
 }));
 
 vi.mock("./memory-service", () => ({
@@ -22,7 +22,7 @@ describe("intent-router", () => {
     vi.clearAllMocks();
     getIntentCacheMock.mockResolvedValue(null);
     setIntentCacheMock.mockResolvedValue(undefined);
-    generateWithGeminiMock.mockResolvedValue(null);
+    generateWithChatEndpointMock.mockResolvedValue(null);
   });
 
   it("detects GREETING intent", () => {
@@ -126,12 +126,12 @@ describe("intent-router", () => {
     const result = await resolveIntent("u1", "Phòng nào sắp vượt ngân sách?");
 
     expect(result).toBe("ALERT");
-    expect(generateWithGeminiMock).not.toHaveBeenCalled();
+    expect(generateWithChatEndpointMock).not.toHaveBeenCalled();
     expect(setIntentCacheMock).not.toHaveBeenCalled();
   });
 
   it("uses model for QUERY and stores resolved intent", async () => {
-    generateWithGeminiMock.mockResolvedValue("ANALYSIS");
+    generateWithChatEndpointMock.mockResolvedValue("ANALYSIS");
 
     const result = await resolveIntent("u1", "chi phí tăng vì sao");
 
@@ -140,7 +140,7 @@ describe("intent-router", () => {
   });
 
   it("allows model override for ambiguous non-QUERY pair", async () => {
-    generateWithGeminiMock.mockResolvedValue("ANALYSIS");
+    generateWithChatEndpointMock.mockResolvedValue("ANALYSIS");
 
     const message = "quy trình phê duyệt có điểm nghẽn ở đâu";
     const result = await resolveIntent("u1", message);
@@ -150,7 +150,7 @@ describe("intent-router", () => {
   });
 
   it("keeps ruled intent for non-ambiguous non-QUERY mismatch", async () => {
-    generateWithGeminiMock.mockResolvedValue("QUERY");
+    generateWithChatEndpointMock.mockResolvedValue("QUERY");
 
     const result = await resolveIntent("u1", "Phòng nào sắp vượt ngân sách?");
 

@@ -74,7 +74,7 @@ export default function BudgetsPage() {
   const spentByDept = new Map<string, number>();
   if (txsData?.data) {
     txsData.data.forEach((tx) => {
-      if (tx.departmentId && tx.type === "EXPENSE" && tx.status !== "REJECTED") {
+      if (tx.departmentId && tx.type === "EXPENSE" && tx.status === "EXECUTED") {
         const amount = Number(tx.amount);
         if (!Number.isFinite(amount)) return;
 

@@ -64,7 +64,7 @@ function buildDepartmentSummaryRows(
   const spentByDept = new Map<string, number>();
 
   for (const tx of transactions) {
-    if (!tx.departmentId || tx.type !== "EXPENSE" || tx.status === "REJECTED") {
+    if (!tx.departmentId || tx.type !== "EXPENSE" || tx.status !== "EXECUTED") {
       continue;
     }
     const current = spentByDept.get(tx.departmentId) ?? 0;
@@ -488,7 +488,7 @@ export function BudgetingWorkspace({ token, currentUser }: BudgetingWorkspacePro
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle>Tổng hợp ngân sách phòng ban</CardTitle>
-          <CardDescription>Đồng bộ theo cùng nguồn dữ liệu với màn "Ngân sách" (Department.budgetAllocated + chi từ giao dịch EXPENSE không REJECTED).</CardDescription>
+          <CardDescription>Đồng bộ theo cùng nguồn dữ liệu với màn "Ngân sách" (Department.budgetAllocated + chi từ giao dịch EXPENSE ở trạng thái EXECUTED).</CardDescription>
         </CardHeader>
         <CardContent className="overflow-x-auto">
           <Table>

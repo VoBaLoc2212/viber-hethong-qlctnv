@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { getKnowledgeCorpusVersion, searchKnowledgeChunks } from "../repositories/knowledge-repo";
 import type { AiCitation } from "../types";
-import { generateWithGemini } from "./gemini-client";
+import { generateWithChatEndpoint } from "./openai-chat-client";
 import { getRagCache, setRagCache } from "./memory-service";
 import { buildRagPrompt, buildSystemPrompt } from "./prompt-builder";
 
@@ -209,7 +209,7 @@ export async function resolveByRag(
   } else {
     const systemPrompt = auth ? buildSystemPrompt(auth) : undefined;
     const prompt = buildRagPrompt(question, context, systemPrompt, conversationContext);
-    answer = (await generateWithGemini(prompt)) ?? fallbackAnswer(question, context, knowledgeChunks);
+    answer = (await generateWithChatEndpoint(prompt)) ?? fallbackAnswer(question, context, knowledgeChunks);
   }
 
   const citations = (hasKnowledgeEvidence ? citationsFromKnowledge : staticCitations).slice(0, 8);

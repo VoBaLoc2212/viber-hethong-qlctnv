@@ -39,7 +39,7 @@ function AskAi($session, $sessionId, $message) {
 $manager = Login 'manager' 'manager123'
 $admin = Login 'admin' 'admin123'
 $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$sessionId = "verify-orchestrator-gemini-$ts"
+$sessionId = "verify-orchestrator-chat-$ts"
 
 $primaryQuery = "list latest usd vnd fx rate records from fxrate table token $ts"
 $primary = AskAi $admin.session $sessionId $primaryQuery
@@ -86,5 +86,5 @@ $summary = [ordered]@{
 $summary | ConvertTo-Json -Depth 8
 
 if (-not $summary.pass) {
-  throw 'Chat-orchestrator Gemini verification failed (no TEXT2SQL+SQL evidence from tested prompts).'
+  throw 'Chat-orchestrator verification failed (no TEXT2SQL+SQL evidence from tested prompts).'
 }

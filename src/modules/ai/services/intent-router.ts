@@ -1,5 +1,5 @@
 import type { AiIntent } from "../types";
-import { generateWithGemini } from "./gemini-client";
+import { generateWithChatEndpoint } from "./openai-chat-client";
 import { buildIntentPrompt } from "./prompt-builder";
 import { getIntentCache, setIntentCache } from "./memory-service";
 
@@ -54,9 +54,9 @@ export function isLikelyServiceDataQuestion(message: string): boolean {
   return NORMALIZED_SERVICE_DATA_PATTERN.test(normalizeSearchText(message));
 }
 
-function isAmbiguousIntentPair(ruled: AiIntent, fromGemini: AiIntent) {
-  if (ruled === fromGemini) return false;
-  const pair = new Set([ruled, fromGemini]);
+function isAmbiguousIntentPair(ruled: AiIntent, fromModel: AiIntent) {
+  if (ruled === fromModel) return false;
+  const pair = new Set([ruled, fromModel]);
   if (pair.has("GUIDANCE") && pair.has("ALERT")) return true;
   if (pair.has("GUIDANCE") && pair.has("FORECAST")) return true;
   if (pair.has("GUIDANCE") && pair.has("ANALYSIS")) return true;
@@ -72,8 +72,8 @@ export async function resolveIntent(userId: string, message: string): Promise<Ai
   }
 
   const ruled = ruleBasedIntent(message);
-  const fromGemini = normalizeIntent(await generateWithGemini(buildIntentPrompt(message)));
-  const resolved = fromGemini && (ruled === "QUERY" || isAmbiguousIntentPair(ruled, fromGemini)) ? fromGemini : ruled;
+  const fromModel = normalizeIntent(await generateWithChatEndpoint(buildIntentPrompt(message)));
+  const resolved = fromModel && (ruled === "QUERY" || isAmbiguousIntentPair(ruled, fromModel)) ? fromModel : ruled;
 
   await setIntentCache(userId, message, resolved);
   return resolved;

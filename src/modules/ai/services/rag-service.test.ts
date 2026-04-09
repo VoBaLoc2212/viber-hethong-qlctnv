@@ -3,14 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   searchKnowledgeChunksMock,
   getKnowledgeCorpusVersionMock,
-  generateWithGeminiMock,
+  generateWithChatEndpointMock,
   getRagCacheMock,
   setRagCacheMock,
   readFileMock,
 } = vi.hoisted(() => ({
   searchKnowledgeChunksMock: vi.fn(),
   getKnowledgeCorpusVersionMock: vi.fn(),
-  generateWithGeminiMock: vi.fn(),
+  generateWithChatEndpointMock: vi.fn(),
   getRagCacheMock: vi.fn(),
   setRagCacheMock: vi.fn(),
   readFileMock: vi.fn(),
@@ -21,8 +21,8 @@ vi.mock("../repositories/knowledge-repo", () => ({
   getKnowledgeCorpusVersion: getKnowledgeCorpusVersionMock,
 }));
 
-vi.mock("./gemini-client", () => ({
-  generateWithGemini: generateWithGeminiMock,
+vi.mock("./openai-chat-client", () => ({
+  generateWithChatEndpoint: generateWithChatEndpointMock,
 }));
 
 vi.mock("./memory-service", () => ({
@@ -43,7 +43,7 @@ describe("rag-service", () => {
     getRagCacheMock.mockResolvedValue(null);
     setRagCacheMock.mockResolvedValue(undefined);
     searchKnowledgeChunksMock.mockResolvedValue([]);
-    generateWithGeminiMock.mockResolvedValue(null);
+    generateWithChatEndpointMock.mockResolvedValue(null);
     readFileMock.mockRejectedValue(new Error("not found"));
   });
 
@@ -72,7 +72,7 @@ describe("rag-service", () => {
         content: "Nội dung từ tài liệu upload",
       },
     ]);
-    generateWithGeminiMock.mockResolvedValue("Câu trả lời theo tài liệu upload");
+    generateWithChatEndpointMock.mockResolvedValue("Câu trả lời theo tài liệu upload");
 
     const result = await resolveByRag("Hát loto gồm những quan điểm nào?", {
       userId: "u1",

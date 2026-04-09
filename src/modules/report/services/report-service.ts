@@ -342,8 +342,7 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
     budgetVsActual,
     cashflowForecastNextMonth,
     appliedFilters: {
-      incomeStatusExcluded: [...EXCLUDED_FROM_GLOBAL_METRICS],
-      expenseStatusIncluded: ["EXECUTED"],
+      statusExcludedForFinancialAmounts: [...EXCLUDED_FROM_GLOBAL_METRICS],
       transactionCountIncludesAllStatuses: true,
       ruleDescription: globalMetricsScopeDescription(),
       fromDate: fromDate ? fromDate.toISOString() : null,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { format } from "date-fns";
 import { CheckCircle2, XCircle, Banknote, Ban, Loader2 } from "lucide-react";
 import {
@@ -83,7 +83,7 @@ function ActionButtons({
       </div>
     );
   }
-  if (isAccountant && item.status === "APPROVED") {
+  if (isAccountant && item.status === "APPROVED" && item.transactionStatus === "APPROVED") {
     return (
       <div className="flex gap-1 justify-end">
         <Button size="sm" className="gap-1 h-7 text-xs bg-green-600 hover:bg-green-700 text-white" onClick={() => onAction(item, "execute")}>
@@ -180,19 +180,17 @@ export default function ApprovalsPage() {
     "not-execute": "Không chi",
   };
 
-  const filteredApprovals = useMemo(() => {
-    const keyword = searchText.trim().toLowerCase();
-    if (!keyword) return approvals ?? [];
-
-    return (approvals ?? []).filter((item) => {
-      return (
-        item.transactionCode.toLowerCase().includes(keyword) ||
-        (item.transactionDescription ?? "").toLowerCase().includes(keyword) ||
-        item.transactionAmount.toLowerCase().includes(keyword) ||
-        (item.approver?.fullName ?? "").toLowerCase().includes(keyword)
-      );
-    });
-  }, [approvals, searchText]);
+  const keyword = searchText.trim().toLowerCase();
+  const filteredApprovals = !keyword
+    ? (approvals ?? [])
+    : (approvals ?? []).filter((item) => {
+        return (
+          item.transactionCode.toLowerCase().includes(keyword) ||
+          (item.transactionDescription ?? "").toLowerCase().includes(keyword) ||
+          item.transactionAmount.toLowerCase().includes(keyword) ||
+          (item.approver?.fullName ?? "").toLowerCase().includes(keyword)
+        );
+      });
 
   return (
     <div className="space-y-4">

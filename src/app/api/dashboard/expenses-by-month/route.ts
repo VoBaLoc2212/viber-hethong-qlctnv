@@ -22,9 +22,20 @@ export async function GET(request: NextRequest) {
     requireRole(auth, ["EMPLOYEE", "MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"]);
 
     const txWhere: Prisma.TransactionWhereInput = {
-      status: {
-        notIn: [...EXCLUDED_FROM_GLOBAL_METRICS],
-      },
+      OR: [
+        {
+          type: "INCOME",
+          status: {
+            notIn: [...EXCLUDED_FROM_GLOBAL_METRICS],
+          },
+        },
+        {
+          type: "EXPENSE",
+          status: {
+            notIn: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS],
+          },
+        },
+      ],
       ...(auth.role === "EMPLOYEE" ? { createdById: auth.userId } : {}),
     };
 
@@ -64,7 +75,8 @@ export async function GET(request: NextRequest) {
         appliedFilters: {
           role: auth.role,
           createdById: auth.role === "EMPLOYEE" ? auth.userId : null,
-          statusExcluded: [...EXCLUDED_FROM_GLOBAL_METRICS],
+          incomeStatusExcluded: [...EXCLUDED_FROM_GLOBAL_METRICS],
+          expenseStatusExcluded: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS],
           scope: "GLOBAL_KPI",
           ruleDescription: globalMetricsScopeDescription(),
         },

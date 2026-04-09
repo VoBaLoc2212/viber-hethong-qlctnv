@@ -745,7 +745,11 @@ export async function changeTransactionStatus(
           },
         });
 
-        const nextReserved = addMoney(reserved, `-${decimalToString(tx.amount)}`);
+        const txAmount = decimalToString(tx.amount);
+        const nextReserved = compareMoney(reserved, txAmount) >= 0
+          ? addMoney(reserved, `-${txAmount}`)
+          : "0.00";
+
         await db.budget.update({
           where: { id: budget.id },
           data: { reserved: nextReserved },
@@ -775,8 +779,11 @@ export async function changeTransactionStatus(
             throw new AppError("Insufficient available budget at execute", "UNPROCESSABLE_ENTITY");
           }
 
-          const nextReserved = addMoney(reserved, `-${decimalToString(tx.amount)}`);
-          const nextUsed = addMoney(used, decimalToString(tx.amount));
+          const txAmount = decimalToString(tx.amount);
+          const nextReserved = compareMoney(reserved, txAmount) >= 0
+            ? addMoney(reserved, `-${txAmount}`)
+            : "0.00";
+          const nextUsed = addMoney(used, txAmount);
 
           await db.budget.update({
             where: { id: budget.id },

@@ -17,9 +17,20 @@ export async function GET(request: NextRequest) {
 
     const financialAmountWhere: Prisma.TransactionWhereInput = {
       ...transactionCountWhere,
-      status: {
-        notIn: [...EXCLUDED_FROM_GLOBAL_METRICS],
-      },
+      OR: [
+        {
+          type: "INCOME",
+          status: {
+            notIn: [...EXCLUDED_FROM_GLOBAL_METRICS],
+          },
+        },
+        {
+          type: "EXPENSE",
+          status: {
+            notIn: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS],
+          },
+        },
+      ],
     };
 
     const [departmentAgg, txAgg, pendingCount, transactionCount] = await Promise.all([
@@ -60,7 +71,8 @@ export async function GET(request: NextRequest) {
         appliedFilters: {
           role: auth.role,
           createdById: auth.role === "EMPLOYEE" ? auth.userId : null,
-          statusExcludedForFinancialAmounts: [...EXCLUDED_FROM_GLOBAL_METRICS],
+          incomeStatusExcluded: [...EXCLUDED_FROM_GLOBAL_METRICS],
+          expenseStatusExcluded: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS],
           transactionCountIncludesAllStatuses: true,
           scope: "GLOBAL_KPI",
           ruleDescription: globalMetricsScopeDescription(),

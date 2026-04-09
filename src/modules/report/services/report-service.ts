@@ -115,9 +115,20 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
 
   const financialAmountWhere: Prisma.TransactionWhereInput = {
     ...transactionCountWhere,
-    status: {
-      notIn: [...EXCLUDED_FROM_GLOBAL_METRICS] as TransactionStatus[],
-    },
+    OR: [
+      {
+        type: "INCOME",
+        status: {
+          notIn: [...EXCLUDED_FROM_GLOBAL_METRICS] as TransactionStatus[],
+        },
+      },
+      {
+        type: "EXPENSE",
+        status: {
+          notIn: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS] as TransactionStatus[],
+        },
+      },
+    ],
   };
 
   const [departmentAgg, txAgg, pendingCount, transactionCount, transactions, splitAgg, unsplitExpenses, budgets, recurringRows] =
@@ -333,7 +344,8 @@ export async function getReportsOverview(auth: AuthContext, filter: ReportFilter
     budgetVsActual,
     cashflowForecastNextMonth,
     appliedFilters: {
-      statusExcludedForFinancialAmounts: [...EXCLUDED_FROM_GLOBAL_METRICS],
+      incomeStatusExcluded: [...EXCLUDED_FROM_GLOBAL_METRICS],
+      expenseStatusExcluded: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS],
       transactionCountIncludesAllStatuses: true,
       ruleDescription: globalMetricsScopeDescription(),
       fromDate: fromDate ? fromDate.toISOString() : null,

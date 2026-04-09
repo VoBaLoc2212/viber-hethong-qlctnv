@@ -64,11 +64,11 @@ export function ensureSafeSelect(sql: string) {
 }
 
 export function applyRoleScope(sql: string, auth: AuthContext) {
-  if (auth.role !== "EMPLOYEE") {
+  if (TEXT2SQL_ALLOWED_ROLES.has(auth.role)) {
     return sql;
   }
 
-  throw new AppError("Text2SQL is unavailable for EMPLOYEE role", "FORBIDDEN");
+  throw new AppError("Text2SQL is unavailable for this role", "FORBIDDEN");
 }
 
 export function normalizeSql(raw: string | null): string {
@@ -162,6 +162,8 @@ function toCitation(route: NonNullable<ReturnType<typeof buildHeuristicRoute>>) 
   return "orm:Transaction.groupBy(type,sum amount)";
 }
 
+const TEXT2SQL_ALLOWED_ROLES = new Set<string>(["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
+
 export async function resolveByText2Sql(
   auth: AuthContext,
   message: string,
@@ -171,8 +173,8 @@ export async function resolveByText2Sql(
   citations: AiCitation[];
   relatedData: Record<string, unknown>;
 }> {
-  if (auth.role === "EMPLOYEE") {
-    throw new AppError("Text2SQL is unavailable for EMPLOYEE role", "FORBIDDEN");
+  if (!TEXT2SQL_ALLOWED_ROLES.has(auth.role)) {
+    throw new AppError("Text2SQL is unavailable for this role", "FORBIDDEN");
   }
 
   const cached = await getSqlCache(auth.role, message);

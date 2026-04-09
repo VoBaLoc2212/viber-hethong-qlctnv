@@ -45,12 +45,12 @@ vi.mock("./text2sql-service", () => ({
   resolveByText2Sql: resolveByText2SqlMock,
 }));
 
-function buildInput(message: string) {
+function buildInput(message: string, role: "EMPLOYEE" | "MANAGER" | "ACCOUNTANT" | "FINANCE_ADMIN" | "AUDITOR" = "MANAGER") {
   return {
     auth: {
       userId: "u1",
-      role: "MANAGER" as const,
-      email: "manager@example.com",
+      role,
+      email: `${role.toLowerCase()}@example.com`,
     },
     request: {
       sessionId: "s1",
@@ -124,6 +124,36 @@ describe("chat-orchestrator routing", () => {
     expect(resolveByText2SqlMock).not.toHaveBeenCalled();
   });
 
+  it("keeps RAG for guidance-like service-data question when retrieval supports answer", async () => {
+    resolveIntentMock.mockResolvedValue("GUIDANCE" as AiIntent);
+    resolveByServiceMock.mockResolvedValue(null);
+    resolveByRagMock.mockResolvedValue({
+      answer: "Bước 1: Tạo yêu cầu. Bước 2: Kiểm tra sơ bộ.",
+      citations: [{ source: "docs/mock_quy_trinh_phe_duyet_chi_phi.txt", snippet: "Bước 1" }],
+    });
+
+    const result = await handleAiChat(buildInput("Dựa trên tài liệu KB, quy trình phê duyệt chi phí gồm những bước nào?"));
+
+    expect(result.routeUsed).toBe("RAG");
+    expect(result.answer).toContain("Bước 1");
+  });
+
+  it("forces RAG for guidance-like prompt even when intent router returns QUERY", async () => {
+    resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
+    resolveByServiceMock.mockResolvedValue(null);
+    resolveByRagMock.mockResolvedValue({
+      answer: "Bước 1: Tạo yêu cầu. Bước 2: Kiểm tra sơ bộ.",
+      citations: [{ source: "docs/mock_quy_trinh_phe_duyet_chi_phi.txt", snippet: "Bước 1" }],
+    });
+
+    const result = await handleAiChat(buildInput("Quy trình phê duyệt chi phí gồm những bước nào?"));
+
+    expect(result.intent).toBe("GUIDANCE");
+    expect(result.routeUsed).toBe("RAG");
+    expect(result.answer).toContain("Bước 1");
+    expect(resolveByText2SqlMock).not.toHaveBeenCalled();
+  });
+
   it("keeps SERVICE for capability question instead of forcing RAG", async () => {
     resolveIntentMock.mockResolvedValue("GUIDANCE" as AiIntent);
     resolveByServiceMock.mockResolvedValue({
@@ -165,7 +195,7 @@ describe("chat-orchestrator routing", () => {
     resolveByText2SqlMock.mockResolvedValue({
       answer: "Đã truy vấn 10 dòng dữ liệu phù hợp.",
       citations: [{ source: "text2sql", snippet: "SELECT" }],
-      relatedData: { sql: "SELECT * FROM Transaction LIMIT 10", rows: Array(10).fill({}) },
+      relatedData: { route: "FX_LATEST", rows: Array(10).fill({}) },
     });
 
     const result = await handleAiChat(buildInput("Báo cáo lịch sử chi theo ngày trong tháng này"));
@@ -174,7 +204,7 @@ describe("chat-orchestrator routing", () => {
     expect(resolveByRagMock).not.toHaveBeenCalled();
   });
 
-  it("falls back to RAG when TEXT2SQL throws", async () => {
+  it("returns controlled RBAC message when TEXT2SQL throws for service-data question", async () => {
     resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
     resolveByServiceMock.mockResolvedValue(null);
     resolveByRagMock.mockResolvedValue({
@@ -186,8 +216,8 @@ describe("chat-orchestrator routing", () => {
     const result = await handleAiChat(buildInput("Chi phí hiện tại của phòng Marketing?"));
 
     expect(resolveByText2SqlMock).toHaveBeenCalledTimes(1);
-    expect(result.routeUsed).toBe("RAG");
-    expect(result.answer).toContain("chưa đủ nguồn");
+    expect(result.routeUsed).toBe("SERVICE");
+    expect(result.answer).toContain("phạm vi quyền hiện tại");
   });
 
   it("returns controlled RBAC message for data-runtime policy when retrieval paths are unavailable", async () => {
@@ -205,5 +235,29 @@ describe("chat-orchestrator routing", () => {
     expect(result.answer).toContain("phạm vi quyền hiện tại");
     expect(result.policyKey).toBe("security-logs");
     expect(result.dataDomain).toBe("DATA_RUNTIME");
+  });
+
+  it("does not call service resolver for disallowed fx-management role", async () => {
+    resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
+    resolveByRagMock.mockResolvedValue({
+      answer: "RAG fallback answer",
+      citations: [{ source: "docs/context.md", snippet: "fallback" }],
+    });
+
+    const result = await handleAiChat(buildInput("list latest usd vnd fx rate records from fxrate table", "AUDITOR"));
+
+    expect(result.policyKey).toBe("fx-management");
+    expect(resolveByServiceMock).not.toHaveBeenCalled();
+  });
+
+  it("returns controlled deny for auditor runtime-data question", async () => {
+    resolveIntentMock.mockResolvedValue("QUERY" as AiIntent);
+
+    const result = await handleAiChat(buildInput("Có bao nhiêu giao dịch gần đây?", "AUDITOR"));
+
+    expect(result.routeUsed).toBe("SERVICE");
+    expect(result.answer).toContain("phạm vi quyền hiện tại");
+    expect(resolveByServiceMock).not.toHaveBeenCalled();
+    expect(resolveByText2SqlMock).not.toHaveBeenCalled();
   });
 });

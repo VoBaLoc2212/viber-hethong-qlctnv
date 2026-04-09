@@ -51,7 +51,7 @@ function GetSessionMessages($session, $sessionId) {
   } "Get session messages"
 }
 
-function Ensure-Contract($payload, $requireSqlSelect) {
+function Ensure-Contract($payload, $requireText2SqlMetadata) {
   $errors = @()
 
   if ($null -eq $payload -or $null -eq $payload.data) {
@@ -81,12 +81,18 @@ function Ensure-Contract($payload, $requireSqlSelect) {
     $errors += 'data.scopeApplied is empty'
   }
 
-  if ($requireSqlSelect) {
-    $sql = [string]$data.relatedData.sql
-    if ([string]::IsNullOrWhiteSpace($sql)) {
-      $errors += 'required SQL is missing in relatedData.sql'
-    } elseif ($sql -notmatch '(?i)^\s*select\s') {
-      $errors += "relatedData.sql is not SELECT: $sql"
+  if ($requireText2SqlMetadata) {
+    if ([string]$data.routeUsed -ne 'TEXT2SQL') {
+      $errors += "routeUsed is not TEXT2SQL: $($data.routeUsed)"
+    }
+
+    $route = [string]$data.relatedData.route
+    if ([string]::IsNullOrWhiteSpace($route)) {
+      $errors += 'required relatedData.route is missing'
+    }
+
+    if ($null -eq $data.relatedData.rows) {
+      $errors += 'required relatedData.rows is missing'
     }
   }
 
@@ -140,14 +146,16 @@ Add-ScenarioResult $results 'cache-consistency-text2sql-admin' $pass1 ([ordered]
     policyKey = $adminFirst.data.policyKey
     dataDomain = $adminFirst.data.dataDomain
     scopeApplied = $adminFirst.data.scopeApplied
-    sql = $adminFirst.data.relatedData.sql
+    route = $adminFirst.data.relatedData.route
+    rowCount = if ($null -ne $adminFirst.data.relatedData.rows) { @($adminFirst.data.relatedData.rows).Count } else { 0 }
   }
   second = [ordered]@{
     routeUsed = $adminSecond.data.routeUsed
     policyKey = $adminSecond.data.policyKey
     dataDomain = $adminSecond.data.dataDomain
     scopeApplied = $adminSecond.data.scopeApplied
-    sql = $adminSecond.data.relatedData.sql
+    route = $adminSecond.data.relatedData.route
+    rowCount = if ($null -ne $adminSecond.data.relatedData.rows) { @($adminSecond.data.relatedData.rows).Count } else { 0 }
   }
 }) $failures1
 

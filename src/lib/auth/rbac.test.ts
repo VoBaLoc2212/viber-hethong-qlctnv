@@ -79,6 +79,8 @@ describe("rbac api consistency", () => {
       "/api/logs/immutable",
       "/api/reports",
       "/api/users",
+      "/api/ai/knowledge/documents",
+      "/api/ai/knowledge/documents/abc",
     ];
 
     for (const endpoint of criticalEndpoints) {

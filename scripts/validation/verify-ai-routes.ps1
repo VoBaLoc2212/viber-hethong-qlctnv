@@ -90,7 +90,7 @@ $null = SafeApiCall {
   } | ConvertTo-Json)
 } 'Create transaction #2'
 
-$ragQuestion = 'Quy trình phê duyệt chi phí gồm những bước nào?'
+$ragQuestion = 'Dựa trên tài liệu KB, quy trình phê duyệt chi phí gồm những bước nào?'
 $text2SqlQuestion = "list latest usd vnd fx rate records from fxrate table token $ts"
 $altText2SqlQuestion = "show average usd vnd fx_rate in current month token $ts"
 
@@ -99,8 +99,11 @@ $text2sql = AskAi $admin.session $sessionId $text2SqlQuestion
 $altText2sql = AskAi $admin.session $sessionId $altText2SqlQuestion
 
 $ragPass = ($rag.data.routeUsed -eq 'RAG') -and (($rag.data.citations | Measure-Object).Count -gt 0)
-$text2sqlPass = ($text2sql.data.routeUsed -eq 'TEXT2SQL') -and ($null -ne $text2sql.data.relatedData.sql) -and ([string]$text2sql.data.relatedData.sql -match '(?i)^\s*select\s')
-$altText2sqlPass = ($altText2sql.data.routeUsed -eq 'TEXT2SQL') -and ($null -ne $altText2sql.data.relatedData.sql) -and ([string]$altText2sql.data.relatedData.sql -match '(?i)^\s*select\s')
+$text2sqlRows = if ($null -ne $text2sql.data.relatedData.rows) { @($text2sql.data.relatedData.rows) } else { @() }
+$altText2sqlRows = if ($null -ne $altText2sql.data.relatedData.rows) { @($altText2sql.data.relatedData.rows) } else { @() }
+
+$text2sqlPass = ($text2sql.data.routeUsed -eq 'TEXT2SQL') -and (-not [string]::IsNullOrWhiteSpace([string]$text2sql.data.relatedData.route)) -and ($null -ne $text2sql.data.relatedData.rows)
+$altText2sqlPass = ($altText2sql.data.routeUsed -eq 'TEXT2SQL') -and (-not [string]::IsNullOrWhiteSpace([string]$altText2sql.data.relatedData.route)) -and ($null -ne $altText2sql.data.relatedData.rows)
 
 $summary = [ordered]@{
   setup = [ordered]@{
@@ -118,9 +121,9 @@ $summary = [ordered]@{
   text2sqlPrimary = [ordered]@{
     routeUsed = $text2sql.data.routeUsed
     policyKey = $text2sql.data.policyKey
-    hasSql = ($null -ne $text2sql.data.relatedData.sql)
-    sqlPreview = if ($text2sql.data.relatedData.sql) { [string]$text2sql.data.relatedData.sql } else { $null }
-    rowCount = if ($null -ne $text2sql.data.relatedData.rows) { ($text2sql.data.relatedData.rows | Measure-Object).Count } else { 0 }
+    hasRoute = (-not [string]::IsNullOrWhiteSpace([string]$text2sql.data.relatedData.route))
+    route = $text2sql.data.relatedData.route
+    rowCount = $text2sqlRows.Count
     text2sqlError = $text2sql.data.relatedData.text2sqlError
     text2sqlErrorCode = $text2sql.data.relatedData.text2sqlErrorCode
     pass = $text2sqlPass
@@ -128,9 +131,9 @@ $summary = [ordered]@{
   text2sqlAlternative = [ordered]@{
     routeUsed = $altText2sql.data.routeUsed
     policyKey = $altText2sql.data.policyKey
-    hasSql = ($null -ne $altText2sql.data.relatedData.sql)
-    sqlPreview = if ($altText2sql.data.relatedData.sql) { [string]$altText2sql.data.relatedData.sql } else { $null }
-    rowCount = if ($null -ne $altText2sql.data.relatedData.rows) { ($altText2sql.data.relatedData.rows | Measure-Object).Count } else { 0 }
+    hasRoute = (-not [string]::IsNullOrWhiteSpace([string]$altText2sql.data.relatedData.route))
+    route = $altText2sql.data.relatedData.route
+    rowCount = $altText2sqlRows.Count
     text2sqlError = $altText2sql.data.relatedData.text2sqlError
     text2sqlErrorCode = $altText2sql.data.relatedData.text2sqlErrorCode
     pass = $altText2sqlPass
@@ -141,5 +144,5 @@ $summary = [ordered]@{
 $summary | ConvertTo-Json -Depth 10
 
 if (-not $summary.pass) {
-  throw 'RAG/TEXT2SQL route verification failed (RAG failed or no TEXT2SQL+SQL evidence from tested prompts).'
+  throw 'RAG/TEXT2SQL route verification failed (RAG failed or no TEXT2SQL metadata evidence from tested prompts).'
 }

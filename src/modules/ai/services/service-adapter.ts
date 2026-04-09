@@ -11,8 +11,8 @@ import type { AiIntent, AiResolution } from "../types";
 import { resolveAiPolicy } from "./ai-policy";
 
 const REPORT_ROLES = ["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN", "AUDITOR"] as const;
-const SERVICE_DATA_PATTERN = /chi phí|chi tiêu|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký|tổng thu|tổng chi|tổng ngân sách|số dư|doanh số|thu hiện tại|chi hiện tại|thu chi hiện tại|lịch sử|history/i;
-const NORMALIZED_SERVICE_DATA_PATTERN = /chi phi|chi tieu|ngan?\s*sach|giao dich|expense|income|approval|phe duyet|phong ban|department|bao cao|report|doanh thu|fx|ty gia|usd|vnd|q[1-4]|quy|thang|nam|kpi|danh muc|audit|log|nhat ky|tong thu|tong chi|tong ngan sach|so du|doanh so|thu hien tai|chi hien tai|thu chi hien tai|lich su|history|budget/i;
+const SERVICE_DATA_PATTERN = /chi phí|chi tiêu|ngân sách|giao dịch|expense|income|approval|phê duyệt|phòng ban|department|báo cáo|report|doanh thu|fx|tỷ giá|usd|vnd|q[1-4]|quý|tháng|năm|kpi|danh mục|audit|log|nhật ký|tổng thu|tổng chi|tổng ngân sách|số dư|doanh số|thu hiện tại|chi hiện tại|thu chi hiện tại|lịch sử|history|hoàn ứng|settlement|quỹ tiền mặt|cashbook/i;
+const NORMALIZED_SERVICE_DATA_PATTERN = /chi phi|chi tieu|ngan?\s*sach|giao dich|expense|income|approval|phe duyet|phong ban|department|bao cao|report|doanh thu|fx|ty gia|usd|vnd|q[1-4]|quy|thang|nam|kpi|danh muc|audit|log|nhat ky|tong thu|tong chi|tong ngan sach|so du|doanh so|thu hien tai|chi hien tai|thu chi hien tai|lich su|history|hoan ung|settlement|quy tien mat|cashbook|budget/i;
 const KPI_SUMMARY_PATTERN = /tổng ngân sách|tổng chi|tổng thu|số dư|còn lại hiện tại|kpi hiện tại|thu hiện tại|chi hiện tại|thu chi hiện tại|current income|current expense|current cashflow/i;
 const QUANTITY_PATTERN = /co\s*bao\s*nhieu|bao\s*nhieu|so\s*luong|count|may/i;
 const MONEY_AMOUNT_PATTERN = /bao\s*nhieu\s*tien|bao\s*nhieu\s*vnd|so\s*tien|tong\s*ngan\s*sach|tong\s*chi|tong\s*thu|so\s*du|con\s*bao\s*nhieu|con\s*lai|con\s*kha\s*dung|remaining|available/i;

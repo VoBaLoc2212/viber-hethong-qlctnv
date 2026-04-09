@@ -128,7 +128,7 @@
       },
       "assertions": {
         "requireNonEmptyAnswer": true,
-        "requireSqlSelectForRoles": ["FINANCE_ADMIN"]
+        "requireText2SqlMetadataForRoles": ["FINANCE_ADMIN"]
       }
     },
     {
@@ -153,7 +153,7 @@
       },
       "assertions": {
         "requireNonEmptyAnswer": true,
-        "requireSqlSelectForRoles": ["FINANCE_ADMIN"]
+        "requireText2SqlMetadataForRoles": ["FINANCE_ADMIN"]
       }
     },
     {
@@ -166,9 +166,8 @@
       "expectedByRole": {
         "*": {
           "allowedRoutes": ["RAG"],
-          "policyKey": "generic",
-          "dataDomain": "GENERAL",
-          "scopeApplied": "generic-assistant-scope"
+          "policyKey": "guidance",
+          "dataDomain": "PROCESS_POLICY"
         }
       },
       "assertions": {
@@ -187,9 +186,8 @@
       "expectedByRole": {
         "*": {
           "allowedRoutes": ["RAG"],
-          "policyKey": "generic",
-          "dataDomain": "GENERAL",
-          "scopeApplied": "generic-assistant-scope"
+          "policyKey": "guidance",
+          "dataDomain": "PROCESS_POLICY"
         }
       },
       "assertions": {
@@ -343,7 +341,7 @@
       },
       "assertions": {
         "requireNonEmptyAnswer": true,
-        "requireSqlSelectForRoles": ["FINANCE_ADMIN"]
+        "requireText2SqlMetadataForRoles": ["FINANCE_ADMIN"]
       }
     },
     {

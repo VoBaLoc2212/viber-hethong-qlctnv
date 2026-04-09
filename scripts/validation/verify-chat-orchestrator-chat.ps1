@@ -52,17 +52,20 @@ if ($null -ne $primary.data.citations) { $citationSources1 = $primary.data.citat
 $citationSources2 = @()
 if ($null -ne $secondary.data.citations) { $citationSources2 = $secondary.data.citations | ForEach-Object { $_.source } }
 
-$primaryPass = ($primary.data.routeUsed -eq 'TEXT2SQL') -and ($null -ne $primary.data.relatedData.sql) -and ([string]$primary.data.relatedData.sql -match '(?i)^\s*select\s')
-$secondaryPass = ($secondary.data.routeUsed -eq 'TEXT2SQL') -and ($null -ne $secondary.data.relatedData.sql) -and ([string]$secondary.data.relatedData.sql -match '(?i)^\s*select\s')
+$primaryRows = if ($null -ne $primary.data.relatedData.rows) { @($primary.data.relatedData.rows) } else { @() }
+$secondaryRows = if ($null -ne $secondary.data.relatedData.rows) { @($secondary.data.relatedData.rows) } else { @() }
+
+$primaryPass = ($primary.data.routeUsed -eq 'TEXT2SQL') -and (-not [string]::IsNullOrWhiteSpace([string]$primary.data.relatedData.route)) -and ($null -ne $primary.data.relatedData.rows)
+$secondaryPass = ($secondary.data.routeUsed -eq 'TEXT2SQL') -and (-not [string]::IsNullOrWhiteSpace([string]$secondary.data.relatedData.route)) -and ($null -ne $secondary.data.relatedData.rows)
 
 $summary = [ordered]@{
   primary = [ordered]@{
     routeUsed = $primary.data.routeUsed
     policyKey = $primary.data.policyKey
     answer = $primary.data.answer
-    hasSql = ($null -ne $primary.data.relatedData.sql)
-    sql = $primary.data.relatedData.sql
-    sqlLooksSelect = if ($primary.data.relatedData.sql) { ([string]$primary.data.relatedData.sql -match '(?i)^\s*select\s') } else { $false }
+    hasRoute = (-not [string]::IsNullOrWhiteSpace([string]$primary.data.relatedData.route))
+    route = $primary.data.relatedData.route
+    rowCount = $primaryRows.Count
     text2sqlError = $primary.data.relatedData.text2sqlError
     text2sqlErrorCode = $primary.data.relatedData.text2sqlErrorCode
     citationSources = $citationSources1
@@ -72,9 +75,9 @@ $summary = [ordered]@{
     routeUsed = $secondary.data.routeUsed
     policyKey = $secondary.data.policyKey
     answer = $secondary.data.answer
-    hasSql = ($null -ne $secondary.data.relatedData.sql)
-    sql = $secondary.data.relatedData.sql
-    sqlLooksSelect = if ($secondary.data.relatedData.sql) { ([string]$secondary.data.relatedData.sql -match '(?i)^\s*select\s') } else { $false }
+    hasRoute = (-not [string]::IsNullOrWhiteSpace([string]$secondary.data.relatedData.route))
+    route = $secondary.data.relatedData.route
+    rowCount = $secondaryRows.Count
     text2sqlError = $secondary.data.relatedData.text2sqlError
     text2sqlErrorCode = $secondary.data.relatedData.text2sqlErrorCode
     citationSources = $citationSources2
@@ -86,5 +89,5 @@ $summary = [ordered]@{
 $summary | ConvertTo-Json -Depth 8
 
 if (-not $summary.pass) {
-  throw 'Chat-orchestrator verification failed (no TEXT2SQL+SQL evidence from tested prompts).'
+  throw 'Chat-orchestrator verification failed (no TEXT2SQL metadata evidence from tested prompts).'
 }

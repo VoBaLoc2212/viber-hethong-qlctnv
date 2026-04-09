@@ -1,13 +1,14 @@
 import type { NextRequest } from "next/server";
 
 import { ingestKnowledgeDocument, listKnowledgeDocumentsForAdmin } from "@/modules/ai";
-import { created, handleApiError, ok, requireAuth } from "@/modules/shared";
+import { created, handleApiError, ok, requireAuth, requireRole } from "@/modules/shared";
 import { AppError } from "@/modules/shared/errors/app-error";
 import { getCorrelationId } from "@/modules/shared/http/request";
 
 export async function GET(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["FINANCE_ADMIN"]);
     const documents = await listKnowledgeDocumentsForAdmin(auth);
     return ok({ documents }, {});
   } catch (error) {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const auth = await requireAuth(request);
+    requireRole(auth, ["FINANCE_ADMIN"]);
 
     const contentType = request.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("multipart/form-data")) {

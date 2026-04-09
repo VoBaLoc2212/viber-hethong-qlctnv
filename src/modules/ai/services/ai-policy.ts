@@ -55,7 +55,7 @@ export const AI_POLICY_MATRIX: readonly AiPolicyRule[] = [
     allowedRoutesByRole: {
       ACCOUNTANT: ["SERVICE"],
       FINANCE_ADMIN: ["SERVICE", "TEXT2SQL"],
-      AUDITOR: ["SERVICE", "TEXT2SQL"],
+      AUDITOR: [],
     },
     defaultRoutes: [],
     scopeByRole: {
@@ -87,11 +87,11 @@ export const AI_POLICY_MATRIX: readonly AiPolicyRule[] = [
     keywords: /hoan\s*ung|reimbursement|tam\s*ung|quyet\s*toan/i,
     intents: ["QUERY", "ALERT", "ANALYSIS"],
     allowedRoutesByRole: {
-      EMPLOYEE: ["SERVICE"],
       MANAGER: ["SERVICE"],
       ACCOUNTANT: ["SERVICE"],
       FINANCE_ADMIN: ["SERVICE"],
-      AUDITOR: ["SERVICE"],
+      EMPLOYEE: [],
+      AUDITOR: [],
     },
     defaultRoutes: [],
     scopeByRole: {
@@ -111,7 +111,7 @@ export const AI_POLICY_MATRIX: readonly AiPolicyRule[] = [
     allowedRoutesByRole: {
       ACCOUNTANT: ["SERVICE"],
       FINANCE_ADMIN: ["SERVICE", "TEXT2SQL"],
-      AUDITOR: ["SERVICE", "TEXT2SQL"],
+      AUDITOR: [],
     },
     defaultRoutes: [],
     scopeByRole: {
@@ -130,7 +130,7 @@ export const AI_POLICY_MATRIX: readonly AiPolicyRule[] = [
       MANAGER: ["SERVICE", "TEXT2SQL"],
       ACCOUNTANT: ["SERVICE", "TEXT2SQL"],
       FINANCE_ADMIN: ["SERVICE", "TEXT2SQL"],
-      AUDITOR: ["SERVICE", "TEXT2SQL"],
+      AUDITOR: [],
     },
     defaultRoutes: [],
     scopeByRole: {
@@ -144,13 +144,13 @@ export const AI_POLICY_MATRIX: readonly AiPolicyRule[] = [
   {
     key: "budgets",
     dataDomain: "DATA_RUNTIME",
-    keywords: /ngan?\s*sach|budget|phong\s*ban|department|dieu\s*phoi\s*ngan\s*sach|giu\s*cho|kha\s*dung/i,
+    keywords: /ngan?\s*sach|budget|dieu\s*phoi\s*ngan\s*sach|giu\s*cho|kha\s*dung/i,
     intents: ["QUERY", "ANALYSIS", "ALERT"],
     allowedRoutesByRole: {
       MANAGER: ["SERVICE"],
       ACCOUNTANT: ["SERVICE"],
       FINANCE_ADMIN: ["SERVICE", "TEXT2SQL"],
-      AUDITOR: ["SERVICE", "TEXT2SQL"],
+      AUDITOR: [],
     },
     defaultRoutes: [],
     scopeByRole: {
@@ -167,11 +167,11 @@ export const AI_POLICY_MATRIX: readonly AiPolicyRule[] = [
     keywords: /giao\s*dich|expense|income|ma\s*phieu|transaction/i,
     intents: ["QUERY", "ANALYSIS", "ALERT"],
     allowedRoutesByRole: {
-      EMPLOYEE: ["SERVICE"],
       MANAGER: ["SERVICE"],
       ACCOUNTANT: ["SERVICE"],
       FINANCE_ADMIN: ["SERVICE", "TEXT2SQL"],
-      AUDITOR: ["SERVICE", "TEXT2SQL"],
+      EMPLOYEE: [],
+      AUDITOR: [],
     },
     defaultRoutes: [],
     scopeByRole: {
@@ -190,9 +190,12 @@ export const AI_POLICY_MATRIX: readonly AiPolicyRule[] = [
     intents: ["QUERY", "ANALYSIS"],
     allowedRoutesByRole: {
       FINANCE_ADMIN: ["SERVICE", "TEXT2SQL"],
-      AUDITOR: ["RAG"],
+      MANAGER: ["SERVICE"],
+      ACCOUNTANT: ["SERVICE"],
+      EMPLOYEE: [],
+      AUDITOR: [],
     },
-    defaultRoutes: ["RAG"],
+    defaultRoutes: [],
     scopeByRole: {
       FINANCE_ADMIN: "fx-admin-scope",
       AUDITOR: "fx-policy-read-only",
@@ -230,8 +233,13 @@ export function resolveAiPolicy(message: string, intent: AiIntent, role: UserRol
 } {
   const normalized = normalizeSearchText(message);
   const matched = AI_POLICY_MATRIX.find((rule) => rule.intents.includes(intent) && rule.keywords.test(normalized));
+  const runtimeDataFallback = matched
+    ? null
+    : AI_POLICY_MATRIX.find((rule) => rule.dataDomain === "DATA_RUNTIME" && rule.keywords.test(normalized));
 
-  if (!matched) {
+  const selected = matched ?? runtimeDataFallback;
+
+  if (!selected) {
     return {
       policyKey: intent === "GUIDANCE" ? "guidance" : "generic",
       dataDomain: intent === "GUIDANCE" ? "PROCESS_POLICY" : "GENERAL",
@@ -241,10 +249,10 @@ export function resolveAiPolicy(message: string, intent: AiIntent, role: UserRol
   }
 
   return {
-    policyKey: matched.key,
-    dataDomain: matched.dataDomain,
-    allowedRoutes: matched.allowedRoutesByRole[role] ?? matched.defaultRoutes,
-    scopeApplied: matched.scopeByRole[role] ?? matched.defaultScope,
+    policyKey: selected.key,
+    dataDomain: selected.dataDomain,
+    allowedRoutes: selected.allowedRoutesByRole[role] ?? selected.defaultRoutes,
+    scopeApplied: selected.scopeByRole[role] ?? selected.defaultScope,
   };
 }
 

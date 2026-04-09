@@ -63,43 +63,32 @@ function UploadKnowledgeDocument($token, $filePath) {
     '-s',
     '-X', 'POST',
     'http://localhost:3001/api/ai/knowledge/documents',
-    '-F', "file=@$filePath"
+    '-F', "file=@$filePath",
+    '-w', "`nHTTP_STATUS:%{http_code}"
   ) + $headers
 
-  $raw = & curl.exe @args
+  $rawWithStatus = & curl.exe @args
 
-  try {
-    $payload = $raw | ConvertFrom-Json
-  } catch {
-    return [pscustomobject]@{
-      ok = $false
-      status = 0
-      raw = $raw
-      payload = $null
-    }
+  $status = 0
+  $body = [string]$rawWithStatus
+  if ($body -match "HTTP_STATUS:(\d{3})\s*$") {
+    $status = [int]$Matches[1]
+    $body = $body -replace "\s*HTTP_STATUS:\d{3}\s*$", ""
   }
 
-  if ($payload.error) {
-    $statusCode = if ($payload.error.code) {
-      switch ($payload.error.code) {
-        'FORBIDDEN' { 403 }
-        'UNAUTHORIZED' { 401 }
-        default { 400 }
-      }
-    } else { 400 }
-
-    return [pscustomobject]@{
-      ok = $false
-      status = $statusCode
-      raw = $raw
-      payload = $payload
+  $payload = $null
+  try {
+    if (-not [string]::IsNullOrWhiteSpace($body)) {
+      $payload = $body | ConvertFrom-Json
     }
+  } catch {
+    $payload = $null
   }
 
   return [pscustomobject]@{
-    ok = $true
-    status = 201
-    raw = $raw
+    ok = ($status -ge 200 -and $status -lt 300)
+    status = $status
+    raw = $body
     payload = $payload
   }
 }
@@ -223,7 +212,7 @@ foreach ($role in @('EMPLOYEE', 'MANAGER', 'ACCOUNTANT', 'AUDITOR')) {
   }
 }
 
-$enforceKbAdminOnly = $false
+$enforceKbAdminOnly = $true
 
 $filteredQuestions = @($bank.questions)
 if ($Smoke.IsPresent) {
@@ -256,7 +245,8 @@ foreach ($question in $filteredQuestions) {
     $dataDomain = [string]$data.dataDomain
     $scopeApplied = [string]$data.scopeApplied
     $answer = [string]$data.answer
-    $sql = if ($null -ne $data.relatedData) { [string]$data.relatedData.sql } else { $null }
+    $text2sqlRoute = if ($null -ne $data.relatedData) { [string]$data.relatedData.route } else { $null }
+    $text2sqlRows = if ($null -ne $data.relatedData -and $null -ne $data.relatedData.rows) { @($data.relatedData.rows) } else { @() }
 
     $citationSources = @()
     if ($null -ne $data.citations) {
@@ -299,12 +289,16 @@ foreach ($question in $filteredQuestions) {
       $failureReasons += 'citations are empty'
     }
 
-    $requiredSqlRoles = To-StringArray $question.assertions.requireSqlSelectForRoles
-    if ($requiredSqlRoles -contains $role) {
-      if ([string]::IsNullOrWhiteSpace($sql)) {
-        $failureReasons += 'relatedData.sql is missing'
-      } elseif ($sql -notmatch '(?i)^\s*select\s') {
-        $failureReasons += "relatedData.sql is not SELECT: $sql"
+    $requiredText2SqlRoles = To-StringArray $question.assertions.requireText2SqlMetadataForRoles
+    if ($requiredText2SqlRoles -contains $role) {
+      if ($routeUsed -ne 'TEXT2SQL') {
+        $failureReasons += "routeUsed '$routeUsed' != expected 'TEXT2SQL'"
+      }
+      if ([string]::IsNullOrWhiteSpace($text2sqlRoute)) {
+        $failureReasons += 'relatedData.route is missing'
+      }
+      if ($null -eq $data.relatedData.rows) {
+        $failureReasons += 'relatedData.rows is missing'
       }
     }
 
@@ -355,7 +349,8 @@ foreach ($question in $filteredQuestions) {
         dataDomain = $dataDomain
         scopeApplied = $scopeApplied
         answer = $answer
-        sql = $sql
+        text2sqlRoute = $text2sqlRoute
+        text2sqlRowCount = $text2sqlRows.Count
         citationSources = $citationSources
         text2sqlError = if ($null -ne $data.relatedData) { $data.relatedData.text2sqlError } else { $null }
         text2sqlErrorCode = if ($null -ne $data.relatedData) { $data.relatedData.text2sqlErrorCode } else { $null }

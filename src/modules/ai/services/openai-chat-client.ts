@@ -1,8 +1,17 @@
-const AI_CHAT_ENDPOINT = process.env.AI_CHAT_ENDPOINT?.trim();
 const AI_CHAT_API_KEY = process.env.AI_CHAT_API_KEY?.trim();
 const AI_CHAT_MODEL = process.env.AI_CHAT_MODEL?.trim();
 const AI_TEMPERATURE = Number(process.env.AI_TEMPERATURE ?? 0.2);
 const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS ?? 30000);
+
+function resolveChatEndpoint(): string | null {
+  const raw = process.env.AI_CHAT_ENDPOINT?.trim() || process.env.AI_CHAT_BASE_URL?.trim();
+  if (!raw) return null;
+
+  const normalized = raw.replace(/\/+$/, "");
+  if (normalized.endsWith("/chat/completions")) return normalized;
+  if (normalized.endsWith("/v1")) return `${normalized}/chat/completions`;
+  return `${normalized}/v1/chat/completions`;
+}
 
 type OpenAiChatResponse = {
   choices?: Array<{
@@ -32,7 +41,8 @@ function resolveMessageContent(content: string | Array<{ text?: string }> | unde
 }
 
 export async function generateWithChatEndpoint(prompt: string): Promise<string | null> {
-  if (!AI_CHAT_ENDPOINT || !AI_CHAT_API_KEY || !AI_CHAT_MODEL) {
+  const endpoint = resolveChatEndpoint();
+  if (!endpoint || !AI_CHAT_API_KEY || !AI_CHAT_MODEL) {
     return null;
   }
 
@@ -43,7 +53,7 @@ export async function generateWithChatEndpoint(prompt: string): Promise<string |
   );
 
   try {
-    const response = await fetch(AI_CHAT_ENDPOINT, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

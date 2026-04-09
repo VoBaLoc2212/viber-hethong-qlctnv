@@ -120,33 +120,33 @@ describe("intent-router", () => {
     }
   });
 
-  it("respects cache and skips model call", async () => {
+  it("uses rule-first path for service-data questions instead of cache short-circuit", async () => {
     getIntentCacheMock.mockResolvedValue({ intent: "ALERT" });
 
     const result = await resolveIntent("u1", "Phòng nào sắp vượt ngân sách?");
 
     expect(result).toBe("ALERT");
-    expect(generateWithChatEndpointMock).not.toHaveBeenCalled();
-    expect(setIntentCacheMock).not.toHaveBeenCalled();
+    expect(generateWithChatEndpointMock).toHaveBeenCalledTimes(1);
+    expect(setIntentCacheMock).toHaveBeenCalledWith("u1", "Phòng nào sắp vượt ngân sách?", "ALERT");
   });
 
-  it("uses model for QUERY and stores resolved intent", async () => {
+  it("keeps QUERY for service-data questions even when model suggests another intent", async () => {
     generateWithChatEndpointMock.mockResolvedValue("ANALYSIS");
 
-    const result = await resolveIntent("u1", "chi phí tăng vì sao");
+    const result = await resolveIntent("u1", "Có bao nhiêu giao dịch gần đây?");
 
-    expect(result).toBe("ANALYSIS");
-    expect(setIntentCacheMock).toHaveBeenCalledWith("u1", "chi phí tăng vì sao", "ANALYSIS");
+    expect(result).toBe("QUERY");
+    expect(setIntentCacheMock).toHaveBeenCalledWith("u1", "Có bao nhiêu giao dịch gần đây?", "QUERY");
   });
 
-  it("allows model override for ambiguous non-QUERY pair", async () => {
+  it("keeps ruled GUIDANCE for guidance-like question even when model suggests ANALYSIS", async () => {
     generateWithChatEndpointMock.mockResolvedValue("ANALYSIS");
 
     const message = "quy trình phê duyệt có điểm nghẽn ở đâu";
     const result = await resolveIntent("u1", message);
 
     expect(ruleBasedIntent(message)).toBe("GUIDANCE");
-    expect(result).toBe("ANALYSIS");
+    expect(result).toBe("GUIDANCE");
   });
 
   it("keeps ruled intent for non-ambiguous non-QUERY mismatch", async () => {

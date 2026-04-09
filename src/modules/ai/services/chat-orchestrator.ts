@@ -1,10 +1,12 @@
 import type { AiChatResponse, AiOrchestratorInput, AiResolution } from "../types";
 import { appendChatMessage, ensureChatSession, listRecentChatContext } from "../repositories/chat-history-repo";
+
+const FULL_DATA_ROLES = new Set<string>(["MANAGER", "ACCOUNTANT", "FINANCE_ADMIN"]);
 import { isLikelyServiceDataQuestion, resolveIntent } from "./intent-router";
 import { resolveByRag } from "./rag-service";
 import { resolveByService } from "./service-adapter";
 import { resolveByText2Sql } from "./text2sql-service";
-import { isRouteAllowed, isRuntimeDataPolicy, resolveAiPolicy } from "./ai-policy";
+import { isRouteAllowed, resolveAiPolicy } from "./ai-policy";
 
 function finalizeResolution(resolution: AiResolution): AiResolution {
   return {
@@ -21,9 +23,14 @@ function normalizeSearchText(value: string) {
     .toLowerCase();
 }
 
+function isGuidanceLikeMessage(message: string) {
+  const normalized = normalizeSearchText(message);
+  return /quy trinh|huong dan|chinh sach|policy|help|tai lieu|document|docs|kb|kien thuc/.test(normalized);
+}
+
 function shouldPreferText2SqlFirst(message: string) {
   const normalized = normalizeSearchText(message);
-  const guidanceLike = /quy trinh|huong dan|chinh sach|policy|help|tai lieu|document|docs/.test(normalized);
+  const guidanceLike = isGuidanceLikeMessage(message);
   const runtimeDataLike = /bao cao|report|kpi|dashboard|lich su|history|tong|bao nhieu|so lieu|theo ngay|theo thang|theo quy|thu chi hien tai|giao dich/.test(normalized);
 
   return runtimeDataLike && !guidanceLike;
@@ -42,9 +49,13 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
     correlationId: input.correlationId,
   });
 
-  const intent = await resolveIntent(input.auth.userId, message);
+  const guidanceLike = isGuidanceLikeMessage(message);
+  const routedIntent = await resolveIntent(input.auth.userId, message);
+  const intent = guidanceLike ? "GUIDANCE" : routedIntent;
   const policy = resolveAiPolicy(message, intent, input.auth.role);
   const conversationMessages = await listRecentChatContext(input.auth.userId, sessionId, 8);
+  const isServiceDataQuestion = isLikelyServiceDataQuestion(message);
+  const canAccessRuntimeData = FULL_DATA_ROLES.has(input.auth.role);
 
   const withPolicy = (resolution: AiResolution): AiResolution => ({
     ...resolution,
@@ -59,7 +70,20 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
     },
   });
 
-  let resolution = await resolveByService(input.auth, intent, message);
+  let resolution: AiResolution | null = null;
+
+  if (isServiceDataQuestion && intent !== "GUIDANCE" && !canAccessRuntimeData) {
+    resolution = {
+      intent,
+      routeUsed: "SERVICE",
+      rawAnswer: "Mình chưa thể truy xuất dữ liệu trong phạm vi quyền hiện tại. Vui lòng thêm phạm vi (phòng ban/thời gian/trạng thái) hoặc dùng tài khoản có quyền phù hợp.",
+      citations: [{ source: "ai-policy", snippet: "controlled-retrieval-rbac" }],
+      suggestedActions: ["Kiểm tra quyền truy cập theo vai trò", "Dùng tài khoản MANAGER, ACCOUNTANT hoặc FINANCE_ADMIN"],
+    };
+  } else {
+    const canUseService = isRouteAllowed("SERVICE", policy.allowedRoutes);
+    resolution = canUseService ? await resolveByService(input.auth, intent, message) : null;
+  }
   let text2SqlFailure: { message: string; code?: string } | null = null;
 
   if (resolution && !isRouteAllowed(resolution.routeUsed, policy.allowedRoutes)) {
@@ -88,9 +112,8 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
   }
 
   if (!resolution) {
-    const isServiceDataQuestion = isLikelyServiceDataQuestion(message);
-    const shouldTryText2Sql = intent !== "GREETING" && isServiceDataQuestion && isRouteAllowed("TEXT2SQL", policy.allowedRoutes);
-    const canUseRag = isRouteAllowed("RAG", policy.allowedRoutes);
+    const shouldTryText2Sql = intent !== "GREETING" && isServiceDataQuestion && !guidanceLike && isRouteAllowed("TEXT2SQL", policy.allowedRoutes);
+    const canUseRag = isRouteAllowed("RAG", policy.allowedRoutes) || guidanceLike;
 
     const preferText2SqlFirst = shouldTryText2Sql && shouldPreferText2SqlFirst(message);
 
@@ -127,7 +150,7 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
         if (canUseRag && !rag) {
           rag = await resolveByRag(message, input.auth, { conversationMessages });
         }
-        if (rag && canUseRag && (!isRuntimeDataPolicy(policy.dataDomain) || !isServiceDataQuestion)) {
+        if (rag && canUseRag && (!isServiceDataQuestion || intent === "GUIDANCE")) {
           resolution = withPolicy({
             intent,
             routeUsed: "RAG",
@@ -143,7 +166,7 @@ export async function handleAiChat(input: AiOrchestratorInput): Promise<AiChatRe
       rag = await resolveByRag(message, input.auth, { conversationMessages });
     }
 
-    if (!resolution && rag && canUseRag && (!isRuntimeDataPolicy(policy.dataDomain) || !isServiceDataQuestion)) {
+    if (!resolution && rag && canUseRag && (!isServiceDataQuestion || intent === "GUIDANCE")) {
       resolution = withPolicy({
         intent,
         routeUsed: "RAG",

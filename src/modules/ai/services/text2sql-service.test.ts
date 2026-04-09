@@ -41,11 +41,31 @@ describe("text2sql guardrails", () => {
     ).toThrow(AppError);
   });
 
+  it("blocks auditor from Text2SQL", () => {
+    expect(() =>
+      applyRoleScope("SELECT * FROM Transaction LIMIT 10", {
+        userId: "u-auditor",
+        role: "AUDITOR",
+        email: "auditor@x.com",
+      }),
+    ).toThrow(AppError);
+  });
+
   it("allows manager role pass-through", () => {
     const sql = applyRoleScope("SELECT * FROM Transaction LIMIT 10", {
       userId: "u2",
       role: "MANAGER",
       email: "m@x.com",
+    });
+
+    expect(sql).toBe("SELECT * FROM Transaction LIMIT 10");
+  });
+
+  it("allows accountant role pass-through", () => {
+    const sql = applyRoleScope("SELECT * FROM Transaction LIMIT 10", {
+      userId: "u3",
+      role: "ACCOUNTANT",
+      email: "a@x.com",
     });
 
     expect(sql).toBe("SELECT * FROM Transaction LIMIT 10");

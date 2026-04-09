@@ -26,9 +26,7 @@ export async function GET(request: NextRequest) {
         },
         {
           type: "EXPENSE",
-          status: {
-            notIn: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS],
-          },
+          status: "EXECUTED",
         },
       ],
     };
@@ -72,7 +70,7 @@ export async function GET(request: NextRequest) {
           role: auth.role,
           createdById: auth.role === "EMPLOYEE" ? auth.userId : null,
           incomeStatusExcluded: [...EXCLUDED_FROM_GLOBAL_METRICS],
-          expenseStatusExcluded: ["EXECUTED", ...EXCLUDED_FROM_GLOBAL_METRICS],
+          expenseStatusIncluded: ["EXECUTED"],
           transactionCountIncludesAllStatuses: true,
           scope: "GLOBAL_KPI",
           ruleDescription: globalMetricsScopeDescription(),
